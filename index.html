@@ -8,62 +8,137 @@
   <meta property="og:title" content="Lubnaa Abdur Rahman">
   <meta property="og:description" content="PhD Student – AI in Health and Nutrition Lab, ARTORG Center, University of Bern">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  
   <style>
+    :root {
+      --primary: #2c3e50;
+      --secondary: #0066cc;
+      --bg-light: #fafafa;
+      --text: #333;
+      --muted: #666;
+      --border: #ddd;
+    }
+
     body {
-      font-family: Arial, sans-serif;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
       margin: 0;
       display: flex;
       min-height: 100vh;
-      color: #222;
+      color: var(--text);
+      background: #fff;
     }
+
     .sidebar {
-      background: #f9f9f9;
-      padding: 20px;
-      width: 280px;
-      border-right: 1px solid #ddd;
+      background: var(--bg-light);
+      padding: 30px 20px;
+      width: 300px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
+
     .author__avatar img {
-      width: 160px;
+      width: 150px;
       border-radius: 50%;
-      display: block;
-      margin: 0 auto 15px;
+      border: 4px solid #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      margin-bottom: 15px;
     }
+
     .author__name {
+      font-size: 1.6em;
+      font-weight: 600;
+      margin: 0 0 0.4em;
       text-align: center;
-      font-size: 1.4em;
-      margin-bottom: 0.2em;
+      color: var(--primary);
     }
+
     .author__bio {
       text-align: center;
-      font-size: 1em;
-      color: #666;
-      margin-bottom: 1em;
+      font-size: 0.95em;
+      color: var(--muted);
+      margin-bottom: 1.5em;
     }
+
     .author__urls {
       list-style: none;
       padding: 0;
+      margin: 0;
+      width: 100%;
       text-align: center;
     }
+
     .author__urls li {
-      margin: 6px 0;
+      margin: 12px 0;
     }
+
     .author__urls a {
       text-decoration: none;
-      color: #0066cc;
+      color: var(--secondary);
+      font-weight: 500;
+      transition: color 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
+
+    .author__urls a:hover {
+      color: var(--primary);
+    }
+
+    .author__urls i {
+      font-size: 1.2em;
+    }
+
     .main {
       flex: 1;
-      padding: 40px;
-      max-width: 800px;
+      padding: 50px;
+      max-width: 900px;
     }
-    h1, h2 {
-      color: #333;
+
+    h1 {
+      color: var(--primary);
+      margin-bottom: 0.8em;
+      font-size: 2em;
     }
-    h2 {
-      margin-top: 1.5em;
-    }
+
     p {
-      line-height: 1.6;
+      line-height: 1.7;
+      font-size: 1.05em;
+      color: var(--text);
+      margin-bottom: 1.4em;
+    }
+
+    a {
+      color: var(--secondary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .inline-icon {
+      margin-right: 6px;
+      color: var(--secondary);
+    }
+
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .main {
+        padding: 30px 20px;
+      }
     }
   </style>
 </head>
@@ -75,10 +150,10 @@
     <h3 class="author__name">Lubnaa Abdur Rahman</h3>
     <p class="author__bio">PhD Student<br>University of Bern</p>
     <ul class="author__urls">
-      <li><a href="https://www.linkedin.com/in/lubnaaar/">LinkedIn</a></li>
-      <li><a href="https://github.com/lubnaa25">GitHub</a></li>
-      <li><a href="https://scholar.google.com/citations?user=qKFHhlcAAAAJ&hl=en">Google Scholar</a></li>
-      <li><a href="https://orcid.org/0000-0001-7271-2814">ORCID</a></li>
+      <li><a href="https://www.linkedin.com/in/lubnaaar/"><i class="fab fa-linkedin"></i> LinkedIn</a></li>
+      <li><a href="https://github.com/lubnaa25"><i class="fab fa-github"></i> GitHub</a></li>
+      <li><a href="https://scholar.google.com/citations?user=qKFHhlcAAAAJ&hl=en"><i class="fas fa-graduation-cap"></i> Google Scholar</a></li>
+      <li><a href="https://orcid.org/0000-0001-7271-2814"><i class="fab fa-orcid"></i> ORCID</a></li>
     </ul>
   </div>
 
@@ -86,6 +161,7 @@
     <h1>About Me</h1>
     <p>
       I am a doctoral student at the 
+      <i class="fas fa-university inline-icon"></i>
       <a href="https://www.unibe.ch/" target="_blank">University of Bern</a> 
       since 2022, working on applying AI in nutrition as part of 
       <a href="https://www.artorg.unibe.ch/research/aihn/group_members/persons/abdur_rahman_lubnaa/index_eng.html" target="_blank">
@@ -94,8 +170,16 @@
       I hold an MSc in Data Science with Distinction (2022)  
       and a BSc in Information Technology with First Class Honours from
       <a href="https://www.apu.edu.my/">Asia Pacific University of Technology and Innovation (APU)</a>.
-      Previously, I worked at <strong>SWIFT</strong> as a Systems and Application Management and Support Specialist,
-      where I gained extensive experience in SAP Basis, SAP GRC, and basic Linux administration.
+    </p>
+
+    <p>
+      I also have industry experience from 2019 to 2022, during which I worked at <a href="https://www.swift.com/" target="_blank">
+      SWIFT
+      </a>  as a Systems and Application Management and Support Specialist,
+      where I gained experience in SAP Basis, SAP GRC, and basic Linux administration. 
+    </p>
+
+    <p> 
       Currently as a PhD student, my research combines computer vision and recent AI advances for automatic dietary assessment and personalized context-aware nutrition.
       Key contributions include works on semi-automatic food segmentation, tackling the Out of distribution problem in food recognition, depth-based food volume estimation,
       and the development of Food Knowledge Graphs for personalized nutrition recommendations.
