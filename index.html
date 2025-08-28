@@ -1,66 +1,89 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" class="no-js">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
+  <title>Lubnaa Abdur Rahman</title>
+  <meta property="og:locale" content="en-US">
+  <meta property="og:site_name" content="Lubnaa Abdur Rahman">
+  <meta property="og:title" content="Lubnaa Abdur Rahman">
+  <meta property="og:description" content="PhD Student – AI in Health and Nutrition Lab, ARTORG Center, University of Bern">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lubnaa Abdur Rahman – PhD Student</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      line-height: 1.6;
-      max-width: 800px;
-      margin: 40px auto;
-      padding: 0 20px;
+      margin: 0;
+      display: flex;
+      min-height: 100vh;
       color: #222;
     }
-    h1 {
-      font-size: 2em;
+    .sidebar {
+      background: #f9f9f9;
+      padding: 20px;
+      width: 280px;
+      border-right: 1px solid #ddd;
+    }
+    .author__avatar img {
+      width: 160px;
+      border-radius: 50%;
+      display: block;
+      margin: 0 auto 15px;
+    }
+    .author__name {
+      text-align: center;
+      font-size: 1.4em;
       margin-bottom: 0.2em;
     }
-    h2 {
-      margin-top: 1.5em;
-      color: #444;
-    }
-    p {
+    .author__bio {
+      text-align: center;
+      font-size: 1em;
+      color: #666;
       margin-bottom: 1em;
     }
-    .links a {
-      margin-right: 15px;
+    .author__urls {
+      list-style: none;
+      padding: 0;
+      text-align: center;
+    }
+    .author__urls li {
+      margin: 6px 0;
+    }
+    .author__urls a {
       text-decoration: none;
       color: #0066cc;
     }
-    .links a:hover {
-      text-decoration: underline;
+    .main {
+      flex: 1;
+      padding: 40px;
+      max-width: 800px;
     }
-    .section {
-      margin-top: 2em;
+    h1, h2 {
+      color: #333;
     }
-   .profile {
-      width: 150px; /* Adjust size here */
-      height: auto;
-      border-radius: 50%; /* Makes it circular */
-      display: block;
-      margin-bottom: 15px;
+    h2 {
+      margin-top: 1.5em;
+    }
+    p {
+      line-height: 1.6;
     }
   </style>
 </head>
 <body>
-  <header>
-    <img src="MyPicture.jpg" alt="Profile Picture" class="profile">
-    <h1>Lubnaa Abdur Rahman</h1>
-    <p><strong>PhD Student</strong><br>
-    Artificial Intelligence in Nutrition<br>
-    University of Bern, Switzerland</p>
-    <div class="links">
-      <a href="https://www.linkedin.com/in/lubnaaar/" target="_blank">LinkedIn</a>
-      <a href="https://github.com/lubnaa25" target="_blank">GitHub</a>
-      <a href="https://scholar.google.com/citations?user=qKFHhlcAAAAJ&hl=en" target="_blank">Google Scholar</a>
-      <a href="https://orcid.org/0000-0001-7271-2814" target="_blank">ORCID</a>
+  <div class="sidebar">
+    <div class="author__avatar">
+      <img src="MyPicture.jpg" alt="Profile picture of Lubnaa Abdur Rahman">
     </div>
-  </header>
+    <h3 class="author__name">Lubnaa Abdur Rahman</h3>
+    <p class="author__bio">PhD Student<br>AI in Nutrition<br>University of Bern</p>
+    <ul class="author__urls">
+      <li><a href="https://www.linkedin.com/in/lubnaaar/">LinkedIn</a></li>
+      <li><a href="https://github.com/lubnaa25">GitHub</a></li>
+      <li><a href="https://scholar.google.com/citations?user=qKFHhlcAAAAJ&hl=en">Google Scholar</a></li>
+      <li><a href="https://orcid.org/0000-0001-7271-2814">ORCID</a></li>
+    </ul>
+  </div>
 
-  <section class="section">
-    <h2>About Me</h2>
+  <div class="main">
+    <h1>About Me</h1>
     <p>
       I am a doctoral student at the 
       <a href="https://www.unibe.ch/" target="_blank">University of Bern</a> 
@@ -68,8 +91,10 @@
       <a href="https://www.artorg.unibe.ch/research/aihn/group_members/persons/abdur_rahman_lubnaa/index_eng.html" target="_blank">
         ARTORG Center’s AI in Nutrition group
       </a>. 
+    </p>
+    <p>
       I hold an MSc in Data Science with Distinction (2022) from the 
-      <a href="https://www.apu.edu.my/" target="_blank">Asia Pacific University of Technology and Innovation (APU)</a>, 
+      <a href="https://www.apu.edu.my/">Asia Pacific University of Technology and Innovation (APU)</a>, 
       and a BSc in Information Technology with First Class Honours from APU in partnership with Staffordshire University.
     </p>
     <p>
@@ -77,17 +102,13 @@
       where I gained extensive experience in SAP Basis, SAP GRC, Linux administration,
       and enterprise IT operations.
     </p>
-  </section>
 
-  <section class="section">
     <h2>Research</h2>
     <p>
-      My PhD research advances AI-driven dietary assessment by integrating computer vision, and recent AI advances for personalized context-aware nutrition.
-      Key contributions include works on semi-automatic food segmentation, tackling the Out of distribution problem in food recognition, and depth-based food volume estimation
+      My PhD research integrates computer vision and recent AI advances for automatic dietary assessment and personalized context-aware nutrition.
+      Key contributions include works on semi-automatic food segmentation, tackling the Out of distribution problem in food recognition, depth-based food volume estimation,
       and the development of Food Knowledge Graphs for personalized nutrition recommendations.
     </p>
-    <p>
-    </p>
-  </section>
+  </div>
 </body>
 </html>
