@@ -1101,7 +1101,7 @@
 
   /* ---------- 3D capture viewer: point cloud on a canvas, no libraries ---------- */
   .cloud { position: relative; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); overflow: hidden; }
-  .cloud canvas { display: block; width: 100%; height: auto; cursor: grab; touch-action: none; }
+  .cloud canvas { display: block; width: 100%; height: auto; cursor: grab; touch-action: pan-y; }
   .cloud canvas:active { cursor: grabbing; }
   .cloud__hint {
     position: absolute; bottom: 0.35rem; left: 0.45rem;
@@ -1127,6 +1127,11 @@
   }
 
   .cloud__zoom { position: absolute; right: 0.4rem; top: 0.4rem; display: flex; flex-direction: column; gap: 0.25rem; z-index: 3; }
+
+  @media (max-width: 700px) {
+    .cloud canvas { max-width: 380px; margin-inline: auto; }
+    .cloud__zoom { right: 0.3rem; top: 0.3rem; }
+  }
 </style>
 </head>
 <body>
@@ -2749,11 +2754,18 @@
     Object.keys(DATA).forEach(function (k) { clouds[k] = decode(DATA[k]); });
 
     var current = 'napolitaine';
-    var yaw = 0.6, pitch = -0.25, zoom = 1, spin = true;
+    var narrow = Math.min(window.innerWidth, window.innerHeight) < 700;
+    var yaw = 0.6, pitch = -0.25, zoom = 1;
+    var spin = !narrow;                 /* no idle animation on a phone */
+    var stride = narrow ? 2 : 1;        /* half the points on a small screen */
+    var visible = true;
     var W = 0, H = 0, img = null, zbuf = null;
 
     function size() {
+      narrow = Math.min(window.innerWidth, window.innerHeight) < 700;
+      stride = narrow ? 2 : 1;
       var w = Math.max(220, Math.round(canvas.clientWidth || 320));
+      if (narrow) { w = Math.min(w, 380); }
       var h = Math.round(w * 0.78);
       canvas.width = w; canvas.height = h;
       W = w; H = h;
@@ -2781,7 +2793,7 @@
       var scale = Math.min(W, H) * 0.42 * zoom / 32000;
       var cxp = W / 2, cyp = H / 2;
 
-      for (var p = 0; p < c.n; p++) {
+      for (var p = 0; p < c.n; p += stride) {
         var x = c.pos[p * 3], y = c.pos[p * 3 + 1], z = c.pos[p * 3 + 2];
 
         /* yaw about Y, then pitch about X */
@@ -2816,34 +2828,61 @@
       ctx.putImageData(img, 0, 0);
     }
 
+    var dirty = true;
+
     function frame() {
-      if (spin) { yaw += 0.004; }
-      draw();
+      if (visible && (spin || dirty)) {
+        if (spin) { yaw += 0.004; }
+        draw();
+        dirty = false;
+      }
       requestAnimationFrame(frame);
     }
 
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting;
+        if (visible) { dirty = true; }
+      }, { threshold: 0.05 }).observe(canvas);
+    }
+
     /* drag to rotate */
-    var dragging = false, lx = 0, ly = 0;
+    var dragging = false, lx = 0, ly = 0, touching = false;
+
     canvas.addEventListener('pointerdown', function (e) {
-      dragging = true; lx = e.clientX; ly = e.clientY;
-      canvas.setPointerCapture(e.pointerId);
+      dragging = true;
+      touching = e.pointerType === 'touch';
+      lx = e.clientX; ly = e.clientY;
+      if (!touching) { canvas.setPointerCapture(e.pointerId); }
     });
+
     canvas.addEventListener('pointermove', function (e) {
       if (!dragging) { return; }
-      yaw += (e.clientX - lx) * 0.008;
-      pitch += (e.clientY - ly) * 0.006;
-      pitch = Math.max(-1.2, Math.min(1.2, pitch));
+      var dx = e.clientX - lx, dy = e.clientY - ly;
+      yaw += dx * 0.008;
+      /* on touch the page owns vertical movement, so only yaw responds */
+      if (!touching) {
+        pitch += dy * 0.006;
+        pitch = Math.max(-1.2, Math.min(1.2, pitch));
+      }
       lx = e.clientX; ly = e.clientY;
+      dirty = true;
     });
-    canvas.addEventListener('pointerup', function () { dragging = false; });
+
+    function stopDrag() { dragging = false; touching = false; }
+    canvas.addEventListener('pointerup', stopDrag);
+    canvas.addEventListener('pointercancel', stopDrag);
+    canvas.addEventListener('pointerleave', stopDrag);
     canvas.addEventListener('wheel', function (e) {
       e.preventDefault();
       zoom = Math.max(0.5, Math.min(2.6, zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+      dirty = true;
     }, { passive: false });
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-cloud]'), function (b) {
       b.addEventListener('click', function () {
         current = b.getAttribute('data-cloud');
+        dirty = true;
         Array.prototype.forEach.call(document.querySelectorAll('[data-cloud]'), function (o) {
           o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
         });
@@ -2853,6 +2892,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-zoom]'), function (b) {
       b.addEventListener('click', function () {
         zoom = Math.max(0.5, Math.min(2.6, zoom * (b.getAttribute('data-zoom') === 'in' ? 1.18 : 0.85)));
+        dirty = true;
       });
     });
 
@@ -2860,12 +2900,13 @@
     if (spinBtn) {
       spinBtn.addEventListener('click', function () {
         spin = !spin;
+        dirty = true;
         spinBtn.setAttribute('aria-pressed', spin ? 'true' : 'false');
       });
     }
 
     var rt;
-    window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { size(); }, 180); });
+    window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { size(); dirty = true; }, 180); });
 
     size();
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { spin = false; draw(); }
