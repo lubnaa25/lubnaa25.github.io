@@ -1055,7 +1055,7 @@
     background: var(--surface); border: 1px solid var(--line); border-radius: 2px; padding: 0.12rem 0.34rem;
   }
 
-  /* simulated Graph-RAG exchange */
+  /* simulated RAG exchange */
   .rag { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.7rem; }
   .rag__line { font-size: 0.78rem; line-height: 1.45; opacity: 0; transform: translateY(3px); animation: ragin 0.3s ease-out forwards; }
   @keyframes ragin { to { opacity: 1; transform: none; } }
@@ -1133,6 +1133,7 @@
         <div class="think__body">
           <p class="think__t">I speak&hellip;</p>
           <ul class="think__list">
+            <li><svg class="flag" viewBox="0 0 24 16" aria-hidden="true"><rect width="24" height="4" fill="#EA2839"/><rect y="4" width="24" height="4" fill="#1A206D"/><rect y="8" width="24" height="4" fill="#FFD500"/><rect y="12" width="24" height="4" fill="#00A551"/></svg><b>Mauritian Kreol</b><span>native</span></li>
               <li><svg class="flag" viewBox="0 0 24 16" aria-hidden="true"><rect width="24" height="16" fill="#012169"/><path d="M0 0l24 16M24 0L0 16" stroke="#fff" stroke-width="3.2"/><path d="M0 0l24 16M24 0L0 16" stroke="#C8102E" stroke-width="1.9"/><path d="M12 0v16M0 8h24" stroke="#fff" stroke-width="5.4"/><path d="M12 0v16M0 8h24" stroke="#C8102E" stroke-width="3.2"/></svg><b>English</b><span>native</span></li>
               <li><svg class="flag" viewBox="0 0 24 16" aria-hidden="true"><rect width="8" height="16" fill="#002395"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ED2939"/></svg><b>French</b><span>native</span></li>
               <li><svg class="flag" viewBox="0 0 24 16" aria-hidden="true"><rect width="24" height="5.34" fill="#000"/><rect y="5.34" width="24" height="5.33" fill="#DD0000"/><rect y="10.67" width="24" height="5.33" fill="#FFCE00"/></svg> German<span>A2</span></li>
@@ -1497,7 +1498,7 @@
             <p class="thread__note">
               Grounding language models on validated knowledge. The Swiss Food Knowledge Graph
               unites recipes, ingredients and their substitutions with nutrient data, allergen
-              information, dietary restrictions and national nutrition guidelines, so a Graph-RAG
+              information, dietary restrictions and national nutrition guidelines, so a RAG
               pipeline can answer nutrition questions from verified facts rather than from what a
               model happens to have memorised.
             </p>
@@ -1590,7 +1591,7 @@
                     <button class="demo__btn" type="button" data-rag="diet">Fits a vegan diet?</button>
                   </div>
                   <div class="rag" id="ragLog"></div>
-                  <p class="demo__fine" style="margin-top:0.7rem;">Sample food graph. Illustration only.</p>
+                  <p class="demo__fine" style="margin-top:0.7rem;">Modelled example on a sample food graph. Illustration only.</p>
                 </div>
               </div>
             </div>
@@ -2790,7 +2791,7 @@
     requestAnimationFrame(frame);
   })();
 
-  /* ---------- SwissFKG: real ontology, properties, and a Graph-RAG trace ---------- */
+  /* ---------- SwissFKG: real ontology, properties, and a RAG trace ---------- */
   (function () {
     var svg = document.getElementById('fkgSvg');
     if (!svg) { return; }
@@ -2812,30 +2813,30 @@
 
     var SCRIPTS = {
       allergen: {
-        q: 'The recipe is R\u00f6sti with butter \u2014 is it dairy-free?',
+        q: 'Is this recipe dairy-free?',
         hops: [
           ['recipe|ingredient', '(Recipe:R\u00f6sti, <b>CONTAINS</b>, Ingredient:Butter)'],
           ['ingredient|allergen', '(Ingredient:Butter, <b>ALLERGEN_OF</b>, AllergenCategory:Milk)']
         ],
-        a: '<b>No.</b> Butter maps to the Milk allergen category, one of the 14 defined in the Swiss allergen regulation.'
+        a: '<b>No</b> — it contains butter.'
       },
       swap: {
-        q: 'Swap the butter for something without milk.',
+        q: 'What can replace the butter?',
         hops: [
           ['ingredient|substitute', '(Ingredient:Butter, <b>SUBSTITUTED_BY</b>, Ingredient:Margarine)'],
           ['ingredient|composite', '(Ingredient:Butter, <b>HAS_COMPOSITE_SUBSTITUTE</b>, CompositeSubstitute:Oil+Water)'],
           ['composite|ingredient', '(CompositeSubstitute:Oil+Water, <b>COMPOSED_OF</b>, Ingredient:Rapeseed oil)']
         ],
-        a: 'Margarine as a direct substitute, with its ratio and notes; or the composite substitute, which the graph decomposes into its own ingredients.'
+        a: 'Swap the butter for <b>margarine</b>.'
       },
       diet: {
-        q: 'Does the recipe fit a vegan diet?',
+        q: 'Is it vegan?',
         hops: [
           ['recipe|ingredient', '(Recipe:R\u00f6sti, <b>CONTAINS</b>, Ingredient:Butter)'],
           ['ingredient|dr', '(Ingredient:Butter, <b>IS_SUITABLE_FOR</b>, DR:Vegetarian)'],
           ['recipe|dr', '(Recipe:R\u00f6sti, <b>IS_SUITABLE_FOR</b>, DR:Gluten-free)']
         ],
-        a: '<b>Not as written.</b> Butter is suitable for vegetarian but not vegan diets, so the recipe-level flag fails on one of the 18 restrictions \u2014 substitute it and the flag flips.'
+        a: '<b>No</b> — butter is not vegan. Swap it for margarine.'
       }
     };
 
