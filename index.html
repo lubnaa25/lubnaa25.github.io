@@ -16,6 +16,13 @@
   <meta property="og:image" content="https://lubnaa25.github.io/MyPicture.jpg">
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="MyPicture.jpg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#FBF8F7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171312" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Lubnaa">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
   /* ============================================================
      TOKENS — porcelain grounds, rose-biased neutrals, mauve accent
@@ -441,6 +448,7 @@
     .hero__portrait { order: -1; }
     .portrait { width: min(74%, 230px); margin: 0; }
     .think { align-items: flex-start; }
+    .think__body { width: min(15rem, 100%); }
     .think__tail { align-items: flex-start; margin: 4px 0 0 2.2rem; }
     .panel__intro, .split { grid-template-columns: 1fr; gap: 1.1rem; }
     .srow { grid-template-columns: 1fr; gap: 0.45rem; }
@@ -452,6 +460,29 @@
     .tl__node { grid-column: 1; }
     .tl__entry--left, .tl__entry--right { grid-column: 2; text-align: left; }
     .topbar__mark { max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+
+  @media (max-width: 560px) {
+    :root { --fs-display: clamp(2.3rem, 12vw, 3rem); --rule: 1.9rem; }
+    .hero { padding-top: 1.5rem; padding-bottom: 1.25rem; }
+    .hero__grid { gap: 1.25rem; }
+    .portrait { width: min(64%, 190px); }
+    .hero__name { margin: 0.6rem 0 0.8rem; }
+    .hero__lead { font-size: 1rem; max-width: none; }
+    .expertise { gap: 0.3rem; margin-top: 1rem; }
+    .expertise li { font-size: 0.64rem; padding: 0.24rem 0.45rem; }
+    .hero__meta { gap: 0.3rem 0.9rem; margin-top: 0.9rem; }
+    .hero__links { gap: 0.35rem; margin-top: 1rem; }
+    .chip { font-size: 0.64rem; padding: 0.36rem 0.6rem; }
+    .eyebrow { font-size: 0.62rem; }
+    .metrics { gap: 1.1rem; }
+    .metric__value { font-size: 1.55rem; }
+    .panel__h { font-size: 0.66rem; }
+    .tl { grid-template-columns: 3.2rem minmax(0, 1fr); }
+    .tl::before { left: 1.6rem; }
+    .tl__node { width: 3.2rem; height: 3.2rem; }
+    .pub__title { font-size: 0.88rem; }
+    .pub__meta { font-size: 0.78rem; }
   }
   /* ============================================================ TECH SKIN */
   /* the technical backdrop belongs to the hero only - content sits on a
@@ -977,6 +1008,19 @@
   .mice__key:active { background: var(--accent-soft); }
 
   /* ---------- narrow screens ---------- */
+  @media (max-width: 880px) {
+    /* the chips were absolute under a square portrait, so they printed over the
+       hero title. Below 880 they sit in reserved space instead. */
+    .hero__portrait { padding-bottom: 4.6rem; }
+    .attrs { top: calc(100% + 0.6rem); justify-content: flex-start; gap: 0.28rem; }
+    .attr__chip { font-size: 0.55rem; padding: 0.14rem 0.36rem; }
+    .attr__pop {
+      position: fixed; left: 50%; right: auto; bottom: auto; top: 50%;
+      transform: translate(-50%, -50%); width: min(17rem, calc(100vw - 2rem)); z-index: 90;
+    }
+    .attr[data-open="true"] .attr__pop { transform: translate(-50%, -50%); }
+  }
+
   @media (max-width: 700px) {
     .chatstack { right: 0.6rem; bottom: 0.6rem; gap: 0.35rem; }
     .chatter { width: min(14rem, calc(100vw - 1.2rem)); }
@@ -2631,6 +2675,12 @@
     }
 
     /* say something on arrival, so the bubble is not a mystery */
+    /* on a phone the widgets start folded into the paw, so they cover nothing */
+    if (Math.min(window.innerWidth, window.innerHeight) < 700 && stack && mini) {
+      stack.hidden = true;
+      mini.hidden = false;
+    }
+
     setTimeout(refreshChatter, 2200);
   })();
 
@@ -3241,6 +3291,15 @@
     }, 250);
   }, 3600);
 })();
+</script>
+
+<script>
+  /* progressive enhancement: install the offline shell where it is supported */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* offline support is optional */ });
+    });
+  }
 </script>
 </body>
 </html>
