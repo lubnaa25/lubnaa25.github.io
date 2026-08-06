@@ -237,31 +237,101 @@ var GL = (function () {
     '}'
   ].join('\n');
 
+  /* Gerstner waves: crests sharpen and the surface actually rolls, because the
+     vertices move sideways as well as up. Normals come from the analytic
+     derivatives, so the lighting matches the geometry exactly. */
   var SEA_VS = [
     'attribute vec2 aXZ;',
     'uniform mat4 uProj, uView;',
     'uniform float uTime;',
-    'varying float vWave; varying float vDist;',
+    'uniform vec3 uEye;',
+    'varying vec3 vPos; varying vec3 vNrm; varying float vDist; varying float vCrest;',
+    '',
+    'void gerstner(vec2 d, float len, float amp, float steep, vec2 xz, float t,',
+    '              inout vec3 p, inout vec3 tang, inout vec3 bit) {',
+    '  float k = 6.28318 / len;',
+    '  float c = sqrt(9.8 / k);',
+    '  vec2 dn = normalize(d);',
+    '  float f = k * (dot(dn, xz) - c * t);',
+    '  float a = steep / k;',
+    '  p.x += dn.x * a * cos(f);',
+    '  p.z += dn.y * a * cos(f);',
+    '  p.y += amp * sin(f);',
+    '  tang += vec3(-dn.x * dn.x * (steep * sin(f)), dn.x * (steep * cos(f)), -dn.x * dn.y * (steep * sin(f)));',
+    '  bit  += vec3(-dn.x * dn.y * (steep * sin(f)), dn.y * (steep * cos(f)), -dn.y * dn.y * (steep * sin(f)));',
+    '}',
+    '',
     'void main() {',
-    '  float w = sin(aXZ.x * 0.25 + uTime * 1.1) * 0.35',
-    '          + sin(aXZ.y * 0.31 - uTime * 0.9) * 0.3',
-    '          + sin((aXZ.x + aXZ.y) * 0.12 + uTime * 0.6) * 0.5;',
-    '  vWave = w;',
-    '  vec4 mv = uView * vec4(aXZ.x, w, aXZ.y, 1.0);',
+    '  vec3 p = vec3(aXZ.x, 0.0, aXZ.y);',
+    '  vec3 tang = vec3(1.0, 0.0, 0.0);',
+    '  vec3 bit = vec3(0.0, 0.0, 1.0);',
+    '  gerstner(vec2( 1.0,  0.30), 26.0, 0.55, 0.62, aXZ, uTime, p, tang, bit);',
+    '  gerstner(vec2( 0.72, -0.68), 14.0, 0.32, 0.48, aXZ, uTime, p, tang, bit);',
+    '  gerstner(vec2(-0.42,  0.90),  7.5, 0.17, 0.40, aXZ, uTime, p, tang, bit);',
+    '  gerstner(vec2( 0.15, -0.98),  3.6, 0.08, 0.30, aXZ, uTime, p, tang, bit);',
+    '  vNrm = normalize(cross(bit, tang));',
+    '  vCrest = clamp(p.y * 0.9 + 0.35, 0.0, 1.0);',
+    '  vPos = p;',
+    '  vec4 mv = uView * vec4(p, 1.0);',
     '  vDist = -mv.z;',
     '  gl_Position = uProj * mv;',
     '}'
   ].join('\n');
 
+  /* Water colour comes from how deep the seabed is beneath each point, so the
+     lagoon inside the reef reads turquoise and the open ocean navy. Fresnel
+     tips it towards sky at grazing angles; foam gathers over shallows. */
   var SEA_FS = [
     'precision mediump float;',
-    'uniform vec3 uDeep, uShallow, uFog;',
-    'uniform float uFogNear, uFogFar;',
-    'varying float vWave; varying float vDist;',
+    'uniform vec3 uDeep, uShallow, uSky, uFog, uSun;',
+    'uniform float uFogNear, uFogFar, uTime;',
+    'uniform vec3 uEye;',
+    'uniform sampler2D uDepth;',
+    'uniform vec2 uTexMin, uTexSpan;',
+    'varying vec3 vPos; varying vec3 vNrm; varying float vDist; varying float vCrest;',
+    '',
+    'float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+    'float noise(vec2 p) {',
+    '  vec2 i = floor(p), f = fract(p);',
+    '  f = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),',
+    '             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);',
+    '}',
+    '',
     'void main() {',
-    '  vec3 c = mix(uDeep, uShallow, clamp(vWave * 0.6 + 0.5, 0.0, 1.0));',
+    '  vec2 uv = (vPos.xz - uTexMin) / uTexSpan;',
+    /* red channel holds how shallow the seabed is: 1 at the shoreline, 0 offshore */
+    '  float shallow = 0.0;',
+    '  if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) {',
+    '    shallow = texture2D(uDepth, uv).r;',
+    '  }',
+    '',
+    '  vec3 n = normalize(vNrm);',
+    '  vec3 v = normalize(uEye - vPos);',
+    '  vec3 l = normalize(uSun);',
+    '',
+    /* body colour: deep ocean, lagoon turquoise over shallow ground */
+    '  vec3 body = mix(uDeep, uShallow, smoothstep(0.15, 0.85, shallow));',
+    '',
+    /* fresnel: looking along the surface you see sky, looking down you see water */
+    '  float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0);',
+    '  vec3 col = mix(body, uSky, clamp(fres * 0.85, 0.0, 0.75));',
+    '',
+    /* sun glitter */
+    '  vec3 h = normalize(l + v);',
+    '  float spec = pow(max(dot(n, h), 0.0), 180.0);',
+    '  float sparkle = pow(max(dot(n, h), 0.0), 900.0) * noise(vPos.xz * 6.0 + uTime);',
+    '  col += vec3(1.0, 0.93, 0.78) * (spec * 0.9 + sparkle * 1.6);',
+    '',
+    /* foam: on the crests, and heavy where the water shoals */
+    '  float surf = smoothstep(0.55, 0.95, shallow);',
+    '  float band = noise(vPos.xz * 1.6 - vec2(uTime * 0.6, 0.0));',
+    '  float foam = surf * smoothstep(0.35, 0.9, band + vCrest * 0.5);',
+    '  foam += smoothstep(0.82, 1.0, vCrest) * 0.35;',
+    '  col = mix(col, vec3(0.96, 0.99, 1.0), clamp(foam, 0.0, 0.9));',
+    '',
     '  float f = clamp((vDist - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0);',
-    '  gl_FragColor = vec4(mix(c, uFog, f), 0.92);',
+    '  gl_FragColor = vec4(mix(col, uFog, f), 0.94);',
     '}'
   ].join('\n');
 
@@ -275,20 +345,25 @@ var GL = (function () {
     'void main() {',
     '  vec4 mv = uView * vec4(aPos, 1.0);',
     '  vCol = aCol; vLife = aLife;',
-    '  gl_PointSize = max(1.0, aSize * 320.0 / max(1.0, -mv.z));',
+    '  gl_PointSize = clamp(aSize * 420.0 / max(1.0, -mv.z), 1.0, 190.0);',
     '  gl_Position = uProj * mv;',
     '}'
   ].join('\n');
 
+  /* A hot core with a soft shoulder: lava reads as an ember, ash as a puff. */
   var PART_FS = [
     'precision mediump float;',
     'varying vec3 vCol; varying float vLife;',
     'void main() {',
     '  vec2 d = gl_PointCoord - vec2(0.5);',
-    '  float r = dot(d, d);',
-    '  if (r > 0.25) discard;',
-    '  float a = (1.0 - r * 4.0) * vLife;',
-    '  gl_FragColor = vec4(vCol * a, a);',
+    '  float r2 = dot(d, d);',
+    '  if (r2 > 0.25) discard;',
+    '  float r = sqrt(r2) * 2.0;',
+    '  float core = pow(1.0 - r, 2.2);',
+    '  float halo = pow(1.0 - r, 0.8) * 0.45;',
+    '  float a = (core + halo) * vLife;',
+    '  vec3 c = vCol + vec3(1.0, 0.85, 0.6) * core * 0.5 * step(0.5, vCol.r);',
+    '  gl_FragColor = vec4(c * a, a);',
     '}'
   ].join('\n');
 
@@ -795,11 +870,36 @@ var SOFT = (function () {
     gl.bindBuffer(gl.ARRAY_BUFFER, cBuf);
     gl.bufferData(gl.ARRAY_BUFFER, land.cols, gl.DYNAMIC_DRAW);
   }
+  /* A one-channel image of how shallow the seabed is: 1 at the shoreline,
+     0 in deep water. The sea shader samples it for lagoon colour and foam. */
+  var depthTex = null, depthPix = new Uint8Array(land.N * land.N * 4);
+
+  function pushDepth() {
+    if (useSoft) { return; }
+    for (var i = 0; i < land.N * land.N; i++) {
+      var h = land.height[i];                       /* metres, negative offshore */
+      var shallow = h > 0 ? 1 : Math.max(0, 1 + h / 260);
+      var v = Math.round(shallow * 255);
+      depthPix[i * 4] = v; depthPix[i * 4 + 1] = v; depthPix[i * 4 + 2] = v; depthPix[i * 4 + 3] = 255;
+    }
+    if (!depthTex) {
+      depthTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, depthTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, depthTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, land.N, land.N, 0, gl.RGBA, gl.UNSIGNED_BYTE, depthPix);
+  }
+
   land.update(0, 0);
   pushTerrain();
+  pushDepth();
 
   /* sea: a big grid so the waves have somewhere to happen */
-  var SEA_N = 90, SEA_R = 150;
+  var SEA_N = 150, SEA_R = 170;
   var seaXZ = [], seaIdx = [];
   for (var sz = 0; sz < SEA_N; sz++) {
     for (var sx = 0; sx < SEA_N; sx++) {
@@ -821,7 +921,7 @@ var SOFT = (function () {
   }
 
   /* ---------------------------------------------------------------- particles */
-  var PMAX = 1400;
+  var PMAX = 2600;
   var pPos = new Float32Array(PMAX * 3);
   var pCol = new Float32Array(PMAX * 3);
   var pSize = new Float32Array(PMAX);
@@ -841,46 +941,106 @@ var SOFT = (function () {
 
   var ventX = 0, ventZ = 0;
 
+  /* kinds: 0 lava spatter, 1 ash, 2 heavy bomb, 3 steam */
   function spawn(kind, power) {
     var i = pNext; pNext = (pNext + 1) % PMAX;
     var ang = Math.random() * Math.PI * 2;
-    var spread = kind === 0 ? 0.5 + power * 1.4 : 0.7;
-    pPos[i * 3] = ventX + Math.cos(ang) * Math.random() * 1.4;
-    pPos[i * 3 + 1] = land.at(ventX, ventZ) + 0.4;
-    pPos[i * 3 + 2] = ventZ + Math.sin(ang) * Math.random() * 1.4;
-    var up = kind === 0 ? (0.55 + Math.random() * 0.9) * (0.5 + power) : 0.30 + Math.random() * 0.35;
-    pVel[i * 3] = Math.cos(ang) * spread * Math.random() * 0.5;
-    pVel[i * 3 + 1] = up;
-    pVel[i * 3 + 2] = Math.sin(ang) * spread * Math.random() * 0.5;
+    var vy = land.at(ventX, ventZ) + 0.3;
+
+    if (kind === 3) {
+      /* steam rises where lava reaches the water, not from the vent */
+      var rr = 26 + Math.random() * 14;
+      pPos[i * 3] = Math.cos(ang) * rr;
+      pPos[i * 3 + 1] = 0.2;
+      pPos[i * 3 + 2] = Math.sin(ang) * rr;
+      pVel[i * 3] = 0; pVel[i * 3 + 1] = 0.22 + Math.random() * 0.2; pVel[i * 3 + 2] = 0;
+      pSize[i] = 0.5 + Math.random() * 0.7;
+    } else if (kind === 2) {
+      /* a bomb: launched hard, falls under gravity, trails sparks */
+      var spd = (1.4 + Math.random() * 1.1) * (0.6 + power);
+      var tilt = 0.25 + Math.random() * 0.5;
+      pPos[i * 3] = ventX; pPos[i * 3 + 1] = vy; pPos[i * 3 + 2] = ventZ;
+      pVel[i * 3] = Math.cos(ang) * tilt * spd;
+      pVel[i * 3 + 1] = spd;
+      pVel[i * 3 + 2] = Math.sin(ang) * tilt * spd;
+      pSize[i] = 0.18 + Math.random() * 0.16;
+    } else if (kind === 0) {
+      var s2 = (0.9 + Math.random() * 1.0) * (0.5 + power);
+      var t2 = 0.12 + Math.random() * 0.42;
+      pPos[i * 3] = ventX + Math.cos(ang) * Math.random() * 1.2;
+      pPos[i * 3 + 1] = vy;
+      pPos[i * 3 + 2] = ventZ + Math.sin(ang) * Math.random() * 1.2;
+      pVel[i * 3] = Math.cos(ang) * t2 * s2;
+      pVel[i * 3 + 1] = s2;
+      pVel[i * 3 + 2] = Math.sin(ang) * t2 * s2;
+      pSize[i] = 0.05 + Math.random() * 0.1;
+    } else {
+      pPos[i * 3] = ventX + Math.cos(ang) * Math.random() * 2.2;
+      pPos[i * 3 + 1] = vy + 1.5;
+      pPos[i * 3 + 2] = ventZ + Math.sin(ang) * Math.random() * 2.2;
+      pVel[i * 3] = Math.cos(ang) * 0.12;
+      pVel[i * 3 + 1] = 0.42 + Math.random() * 0.4;
+      pVel[i * 3 + 2] = Math.sin(ang) * 0.12;
+      pSize[i] = 0.30 + Math.random() * 0.5;
+    }
+
     pAge[i] = 0;
     pKind[i] = kind;
-    pSize[i] = kind === 0 ? 0.05 + Math.random() * 0.09 : 0.12 + Math.random() * 0.2;
     pLife[i] = 1;
   }
 
   function stepParticles(dt) {
     for (var i = 0; i < PMAX; i++) {
       if (pLife[i] <= 0) { continue; }
+      var k = pKind[i];
       pAge[i] += dt;
-      var maxAge = pKind[i] === 0 ? 2.6 : 7.5;
+
+      var maxAge = k === 0 ? 2.4 : (k === 2 ? 4.5 : (k === 3 ? 5.0 : 11.0));
       pLife[i] = Math.max(0, 1 - pAge[i] / maxAge);
-      pVel[i * 3 + 1] -= (pKind[i] === 0 ? 0.55 : -0.06) * dt;   /* ash keeps rising */
+
+      if (k === 0 || k === 2) {
+        pVel[i * 3 + 1] -= 1.15 * dt;                  /* gravity on anything solid */
+        pVel[i * 3] *= (1 - 0.25 * dt);                /* air drag */
+        pVel[i * 3 + 2] *= (1 - 0.25 * dt);
+      } else {
+        /* ash and steam are buoyant, and they billow */
+        pVel[i * 3 + 1] += (k === 1 ? 0.10 : 0.05) * dt;
+        var tw = pAge[i] * 1.3 + i;
+        pVel[i * 3] += Math.sin(tw) * 0.11 * dt;
+        pVel[i * 3 + 2] += Math.cos(tw * 0.9) * 0.11 * dt;
+        pVel[i * 3] += 0.16 * dt;                      /* the plume leans downwind */
+        pSize[i] += (k === 1 ? 0.055 : 0.04) * dt;     /* and expands as it cools */
+      }
+
       pPos[i * 3] += pVel[i * 3] * dt * 6;
       pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt * 6;
       pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt * 6;
-      if (pKind[i] === 1) {
-        pPos[i * 3] += 0.6 * dt;                                  /* the plume leans downwind */
-        pVel[i * 3] *= 1.004;
-      }
+
       var ground = land.at(pPos[i * 3], pPos[i * 3 + 2]);
-      if (pPos[i * 3 + 1] < ground) { pLife[i] = 0; }
+      if (pPos[i * 3 + 1] < ground) {
+        if (k === 0 || k === 2) {
+          /* hits the ground: bounce weakly, cool fast */
+          pPos[i * 3 + 1] = ground;
+          pVel[i * 3 + 1] = Math.abs(pVel[i * 3 + 1]) * 0.22;
+          pAge[i] += 0.5;
+          if (ground <= 0.02 && Math.random() < 0.25) { spawn(3, 0.4); }   /* steam on contact */
+        } else {
+          pLife[i] = 0;
+        }
+      }
 
       var l = pLife[i];
-      if (pKind[i] === 0) {
-        pCol[i * 3] = 1; pCol[i * 3 + 1] = 0.35 + l * 0.5; pCol[i * 3 + 2] = 0.08 * l;
+      if (k === 0 || k === 2) {
+        /* white hot, then yellow, orange, red, then dark rock */
+        var heat = Math.pow(l, 0.55);
+        pCol[i * 3] = Math.min(1, 0.65 + heat * 0.5);
+        pCol[i * 3 + 1] = Math.max(0.06, heat * heat * 0.92);
+        pCol[i * 3 + 2] = Math.max(0.03, Math.pow(heat, 6) * 0.85);
+      } else if (k === 1) {
+        var g = 0.20 + (1 - l) * 0.20;                 /* ash darkens as it spreads */
+        pCol[i * 3] = g + 0.04; pCol[i * 3 + 1] = g; pCol[i * 3 + 2] = g * 0.95;
       } else {
-        var g = 0.34 + (1 - l) * 0.18;
-        pCol[i * 3] = g; pCol[i * 3 + 1] = g * 0.96; pCol[i * 3 + 2] = g * 0.92;
+        pCol[i * 3] = 0.82; pCol[i * 3 + 1] = 0.86; pCol[i * 3 + 2] = 0.9;
       }
     }
     if (useSoft) { return; }
@@ -954,9 +1114,11 @@ var SOFT = (function () {
     /* spawn while it is live */
     var burn = Math.max(S.lava, p < 0.34 ? (1 - Math.abs(p - 0.18) / 0.18) * 0.75 : 0);
     if (burn > 0.02) {
-      var n = Math.round(burn * 9);
+      var n = Math.round(burn * 14);
       for (var s = 0; s < n; s++) { spawn(0, burn); }
-      if (Math.random() < burn * 0.9) { spawn(1, burn); }
+      for (var s2 = 0; s2 < Math.round(burn * 5); s2++) { spawn(1, burn); }
+      if (Math.random() < burn * 0.30) { spawn(2, burn); }
+      if (Math.random() < burn * 0.20) { spawn(3, burn); }
     }
     stepParticles(dt);
 
@@ -1019,11 +1181,21 @@ var SOFT = (function () {
     gl.uniformMatrix4fv(api.seaU.uProj, false, proj);
     gl.uniformMatrix4fv(api.seaU.uView, false, view);
     gl.uniform1f(api.seaU.uTime, time);
-    gl.uniform3f(api.seaU.uDeep, 0.02, 0.10, 0.17);
-    gl.uniform3f(api.seaU.uShallow, 0.10 + 0.1 * (1 - night), 0.42, 0.44);
+    gl.uniform3fv(api.seaU.uEye, new Float32Array(eye));
+    gl.uniform3f(api.seaU.uDeep, 0.012, 0.075, 0.145);
+    gl.uniform3f(api.seaU.uShallow, 0.10, 0.62, 0.60);
+    gl.uniform3f(api.seaU.uSky, fog[0] + 0.16, fog[1] + 0.22, fog[2] + 0.30);
+    gl.uniform3f(api.seaU.uSun, 0.45, 0.72, 0.35);
     gl.uniform3fv(api.seaU.uFog, new Float32Array(fog));
-    gl.uniform1f(api.seaU.uFogNear, 60);
-    gl.uniform1f(api.seaU.uFogFar, 460);
+    gl.uniform1f(api.seaU.uFogNear, 70);
+    gl.uniform1f(api.seaU.uFogFar, 520);
+    gl.uniform2f(api.seaU.uTexMin, land.minX, land.minZ);
+    gl.uniform2f(api.seaU.uTexSpan, land.maxX - land.minX, land.maxZ - land.minZ);
+    if (depthTex) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, depthTex);
+      gl.uniform1i(api.seaU.uDepth, 0);
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, seaBuf);
     gl.enableVertexAttribArray(api.seaA.aXZ);
     gl.vertexAttribPointer(api.seaA.aXZ, 2, gl.FLOAT, false, 0, 0);
@@ -1085,6 +1257,7 @@ var SOFT = (function () {
       S.erosion = erosion; S.green = green;
       land.update(erosion, green);
       pushTerrain();
+      pushDepth();
     }
     S.lift = lift;
 
