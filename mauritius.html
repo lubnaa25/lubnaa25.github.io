@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Born of Fire — Mauritius in 3D</title>
+  <meta name="description" content="How Mauritius was made: a real 3D model of the island, built from its true coastline and summits.">
+  <meta name="author" content="Lubnaa Abdur Rahman">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Born of Fire — Mauritius in 3D">
+  <meta property="og:description" content="The volcano that built Mauritius, in real 3D. Hold to erupt.">
+  <meta property="og:url" content="https://lubnaa25.github.io/mauritius.html">
+  <meta name="theme-color" content="#050A10">
+  <link rel="icon" href="MyPicture.jpg">
+<style>
+  :root {
+    --ink:#F6F1E8; --dim:#93A6AE; --lava:#FFB238; --ember:#FF6B35; --lagoon:#63E0D0;
+    --display:"Bodoni MT","Didot","Hoefler Text",Georgia,serif;
+    --sans:"Avenir Next",Avenir,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: #050A10; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; cursor: grab; touch-action: pan-y; }
+  #gl:active { cursor: grabbing; }
+  #marks { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+  main { position: relative; z-index: 3; }
+
+  .beat { min-height: 100svh; display: grid; align-items: center; padding: 11vh clamp(1.1rem, 6vw, 7rem); pointer-events: none; }
+  .beat--right { justify-items: end; text-align: right; }
+  .beat--mid { justify-items: center; text-align: center; }
+  .card {
+    max-width: 31rem; opacity: 0; transform: translateY(22px);
+    background: linear-gradient(180deg, rgba(4,9,15,0.78), rgba(4,9,15,0.56));
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+    padding: clamp(1rem, 3vw, 1.7rem); backdrop-filter: blur(10px);
+  }
+  .card.in { opacity: 1; transform: none; transition: opacity 0.9s cubic-bezier(0.2,0.8,0.2,1), transform 0.9s cubic-bezier(0.2,0.8,0.2,1); }
+  .when { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.28em; text-transform: uppercase; color: var(--lava); margin: 0 0 0.7rem; }
+  .card h2 { font-family: var(--display); font-weight: 400; margin: 0 0 0.6rem; font-size: clamp(1.6rem, 4.6vw, 2.9rem); line-height: 1; }
+  .card h2 em { font-style: italic; color: var(--lava); }
+  .card p { margin: 0 0 0.6rem; font-size: clamp(0.92rem, 1.3vw, 1.04rem); line-height: 1.6; color: rgba(246,241,232,0.9); }
+  .card p.small { font-size: 0.8rem; color: var(--dim); line-height: 1.55; }
+  .card b { color: #fff; }
+  .flag { color: var(--lava); }
+
+  .do { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid rgba(255,255,255,0.1); pointer-events: auto; }
+  .btn {
+    font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
+    background: rgba(255,255,255,0.06); color: var(--ink); border: 1px solid rgba(255,255,255,0.24);
+    border-radius: 999px; padding: 0.55rem 1rem; touch-action: none; user-select: none;
+  }
+  .btn.hot { background: var(--lava); color: #241300; border-color: var(--lava); }
+  .out { font-family: var(--mono); font-size: 0.68rem; color: var(--lagoon); margin: 0.5rem 0 0; min-height: 1.3em; }
+
+  .hud {
+    position: fixed; z-index: 6; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
+    padding: 0.85rem clamp(1rem, 4vw, 2rem); font-family: var(--mono); font-size: 0.58rem;
+    letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); pointer-events: none;
+  }
+  .hint {
+    position: fixed; z-index: 6; left: 50%; bottom: 1.2rem; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--dim); transition: opacity 0.6s ease;
+  }
+  .hint.gone { opacity: 0; }
+
+  .mark { position: absolute; top: 0; left: 0; transform: translate(-9999px, -9999px); opacity: 0; transition: opacity 0.5s ease; will-change: transform; }
+  .mark.on { opacity: 1; }
+  .mark i { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--lava); box-shadow: 0 0 12px rgba(255,178,56,0.9); margin: 0 0 4px -3px; }
+  .mark b { display: block; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: #fff; white-space: nowrap; }
+  .mark em { display: block; font-style: normal; font-size: 0.58rem; color: var(--dim); white-space: nowrap; }
+
+  .hero { min-height: 100svh; display: grid; place-items: center; text-align: center; padding: 2rem; }
+  .hero h1 { font-family: var(--display); font-weight: 400; margin: 0.4rem 0 1rem; font-size: clamp(2.7rem, 11vw, 7rem); line-height: 0.9; }
+  .hero h1 em { display: block; font-style: italic; color: var(--ember); }
+  .hero p { max-width: 29rem; margin: 0 auto; color: var(--dim); line-height: 1.62; }
+
+  #fallback { position: fixed; inset: 0; display: grid; place-items: center; background: #050A10; z-index: 9; padding: 2rem; text-align: center; }
+  @media (max-width: 640px) { .beat { padding: 9vh 1rem; } .beat--right { justify-items: start; text-align: left; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="marks"></div>
+<div class="hud"><span id="era">the seafloor</span><span>drag to look</span></div>
+<p class="hint" id="hint">Scroll</p>
+<div id="fallback" hidden><p>This page needs WebGL. Try another browser.</p></div>
+
+<main>
+  <section class="hero"><div>
+    <p class="when">20&deg;17&prime;S 57&deg;33&prime;E</p>
+    <h1>Born of<em>Fire</em></h1>
+    <p>The island below is the real Mauritius &mdash; its true coastline, its real summits. Watch it get built, worn down and settled. Drag to look around.</p>
+  </div></section>
+
+  <section class="beat" data-era="the vent opens"><div class="card">
+    <p class="when">~ 8&ndash;10 million years ago</p>
+    <h2>Hold it down</h2>
+    <p>A hotspot under the plate pushes magma through the seafloor. Hold the button and the island rises out of the water in front of you.</p>
+    <div class="do">
+      <button class="btn" id="erupt" type="button">Hold to erupt</button>
+      <p class="out" id="eruptOut">0% risen</p>
+    </div>
+  </div></section>
+
+  <section class="beat beat--right" data-era="the shield grows"><div class="card">
+    <p class="when">Two million years</p>
+    <h2>A shield, not a spike</h2>
+    <p>Flow on flow of basalt spreads wide and low. At its greatest the volcano stood far higher than anything on the island today, with a crater at the summit.</p>
+    <p class="small">The oldest exposed rocks are roughly 7.8 million years old. <span class="flag">Ages vary between surveys.</span></p>
+  </div></section>
+
+  <section class="beat beat--mid" data-era="erosion"><div class="card">
+    <h2>Then it comes apart</h2>
+    <p>Rain, sea and wind strip the cone away. What is left standing are the hard cores &mdash; and those are the mountains Mauritius actually has: Piton de la Petite Rivi&egrave;re Noire at <b>828 m</b>, Pieter Both, Le Pouce, Le Morne Brabant.</p>
+    <p class="small">The shape morphing under you is a real height model, interpolating from the young cone to the modern island.</p>
+  </div></section>
+
+  <section class="beat" data-era="the island today"><div class="card">
+    <p class="when">The map</p>
+    <h2>Where everything happened</h2>
+    <p>This is the real outline &mdash; 51 km east to west, 60 km north to south. The markers are the places the rest of the story needs.</p>
+    <p class="small">Grand Port, where the Dutch sheltered in 1598. Port Louis, the Harbour of Tortoises. Le Morne, the maroon refuge. Aapravasi Ghat, where nearly half a million indentured workers landed.</p>
+  </div></section>
+
+  <section class="beat beat--right" data-era="next"><div class="card">
+    <h2>This is the engine</h2>
+    <p>Real coastline from Natural Earth, real summits at their real coordinates, a WebGL heightfield you can orbit, and an eruption made of 3D particles.</p>
+    <p class="small">The chapters &mdash; the ships, the ebony, Port Louis, abolition, the <em>Atlas</em>, independence &mdash; get rebuilt on top of this next.</p>
+  </div></section>
+</main>
+
+<script>var ISLAND = {"coast": [[25.706, 2.854], [25.519, 0.181], [24.992, -2.872], [23.871, -6.278], [23.633, -8.017], [24.219, -9.721], [21.669, -10.572], [18.762, -12.864], [16.986, -15.482], [17.793, -17.321], [17.87, -18.109], [18.431, -19.061], [18.507, -19.668], [18.142, -20.691], [17.547, -20.9], [16.884, -20.863], [16.315, -21.19], [14.912, -23.726], [14.113, -24.849], [12.804, -25.746], [4.05, -28.546], [-4.806, -29.941], [-7.934, -29.687], [-12.813, -28.111], [-15.703, -27.785], [-17.912, -28.79], [-23.922, -23.355], [-25.247, -21.806], [-25.706, -20.32], [-24.049, -19.668], [-21.465, -20.202], [-20.037, -19.93], [-19.408, -18.49], [-18.864, -15.364], [-18.983, -14.223], [-20.122, -13.58], [-19.281, -10.862], [-19.179, -4.72], [-18.694, -1.35], [-17.98, 0.589], [-15.609, 5.318], [-14.742, 6.242], [-14.53, 6.586], [-12.218, 8.525], [-11.215, 9.014], [-8.954, 9.666], [-7.934, 10.119], [-6.149, 11.976], [-5.826, 14.033], [-5.758, 16.107], [-4.177, 19.033], [-2.886, 23.02], [-2.248, 24.215], [-1.789, 24.886], [1.092, 27.223], [1.806, 27.549], [3.209, 27.658], [3.812, 28.011], [4.271, 28.799], [4.9, 29.587], [6.005, 29.941], [7.654, 29.687], [12.337, 28.31], [13.586, 27.658], [14.122, 26.426], [13.535, 24.505], [13.943, 23.445], [14.683, 22.385], [15.473, 20.519], [16.357, 18.925], [16.629, 17.638], [17.156, 16.95], [17.581, 16.859], [18.813, 17.059], [19.221, 16.95], [20.386, 15.953], [20.692, 15.238], [20.352, 11.641], [21.159, 10.482], [22.239, 9.612], [23.242, 6.441], [25.248, 4.031], [25.706, 2.854]], "w": 51.41, "h": 59.88, "peaks": [["Piton de la Petite Rivi\u00e8re Noire", -13.537, -19.104, 828, 7.0], ["Pieter Both", -2.048, 6.5, 820, 3.2], ["Le Pouce", -2.57, 4.83, 812, 3.0], ["Le Morne Brabant", -23.981, -23.0, 556, 2.0], ["Trou aux Cerfs", -3.093, -7.638, 605, 2.6], ["Corps de Garde", -8.315, -1.293, 719, 2.4], ["Montagne du Rempart", -12.492, -7.972, 777, 2.2]], "places": [["Port Louis", -5.39, 9.617, "capital, founded as Rade des Tortues"], ["Aapravasi Ghat", -4.868, 10.028, "the indenture depot, 1849"], ["Grand Port", 16.751, -17.991, "Port de Warwick, 1598"], ["Le Morne", -23.981, -23.0, "the maroon refuge"], ["Trou aux Cerfs", -3.093, -7.638, "crater, 300 m across"], ["Chamarel", -18.132, -19.995, "the coloured earths"], ["Cap Malheureux", 6.725, 29.432, "the British landed here, 1810"], ["Curepipe", -2.466, -7.638, "on the plateau"]]};</script>
+
+<script>
+/* ============================================================================
+   A small WebGL engine, written from scratch (no libraries — the artifact CSP
+   blocks CDNs). Terrain mesh, animated sea, additive particles, orbit camera.
+   ============================================================================ */
+var GL = (function () {
+  'use strict';
+
+  /* ---------------------------------------------------------------- maths */
+  function mat4() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
+
+  function perspective(fovy, aspect, near, far) {
+    var f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    return new Float32Array([
+      f / aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (far + near) * nf, -1,
+      0, 0, 2 * far * near * nf, 0
+    ]);
+  }
+
+  function lookAt(eye, at, up) {
+    var z0 = eye[0]-at[0], z1 = eye[1]-at[1], z2 = eye[2]-at[2];
+    var len = Math.hypot(z0, z1, z2) || 1; z0/=len; z1/=len; z2/=len;
+    var x0 = up[1]*z2 - up[2]*z1, x1 = up[2]*z0 - up[0]*z2, x2 = up[0]*z1 - up[1]*z0;
+    len = Math.hypot(x0, x1, x2) || 1; x0/=len; x1/=len; x2/=len;
+    var y0 = z1*x2 - z2*x1, y1 = z2*x0 - z0*x2, y2 = z0*x1 - z1*x0;
+    return new Float32Array([
+      x0, y0, z0, 0,
+      x1, y1, z1, 0,
+      x2, y2, z2, 0,
+      -(x0*eye[0] + x1*eye[1] + x2*eye[2]),
+      -(y0*eye[0] + y1*eye[1] + y2*eye[2]),
+      -(z0*eye[0] + z1*eye[1] + z2*eye[2]), 1
+    ]);
+  }
+
+  function multiply(a, b) {
+    var o = new Float32Array(16);
+    for (var i = 0; i < 4; i++) {
+      for (var j = 0; j < 4; j++) {
+        o[i*4+j] = a[j]*b[i*4] + a[4+j]*b[i*4+1] + a[8+j]*b[i*4+2] + a[12+j]*b[i*4+3];
+      }
+    }
+    return o;
+  }
+
+  /* ---------------------------------------------------------------- shaders */
+  function compile(gl, type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      throw new Error('shader: ' + gl.getShaderInfoLog(s));
+    }
+    return s;
+  }
+
+  function program(gl, vs, fs) {
+    var p = gl.createProgram();
+    gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      throw new Error('link: ' + gl.getProgramInfoLog(p));
+    }
+    return p;
+  }
+
+  var TERRAIN_VS = [
+    'attribute vec3 aPos;',
+    'attribute vec3 aNrm;',
+    'attribute vec3 aCol;',
+    'uniform mat4 uProj, uView;',
+    'uniform float uLift;',          /* 0 = seabed, 1 = full height */
+    'varying vec3 vNrm; varying vec3 vCol; varying float vH; varying float vDist;',
+    'void main() {',
+    '  vec3 p = vec3(aPos.x, aPos.y * uLift, aPos.z);',
+    '  vec4 mv = uView * vec4(p, 1.0);',
+    '  vDist = -mv.z;',
+    '  vNrm = aNrm; vCol = aCol; vH = p.y;',
+    '  gl_Position = uProj * mv;',
+    '}'
+  ].join('\n');
+
+  var TERRAIN_FS = [
+    'precision mediump float;',
+    'uniform vec3 uLight;',
+    'uniform vec3 uFog;',
+    'uniform float uFogNear, uFogFar;',
+    'uniform float uLava;',           /* glow while it is still erupting */
+    'varying vec3 vNrm; varying vec3 vCol; varying float vH; varying float vDist;',
+    'void main() {',
+    '  vec3 n = normalize(vNrm);',
+    '  float d = max(dot(n, normalize(uLight)), 0.0);',
+    '  vec3 col = vCol * (0.34 + 0.72 * d);',
+    /* hot rock near the summit while the volcano is live */
+    '  float hot = smoothstep(0.35, 1.0, vH / 900.0) * uLava;',
+    '  col = mix(col, vec3(1.0, 0.42, 0.12), hot * 0.85);',
+    '  float f = clamp((vDist - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0);',
+    '  gl_FragColor = vec4(mix(col, uFog, f), 1.0);',
+    '}'
+  ].join('\n');
+
+  var SEA_VS = [
+    'attribute vec2 aXZ;',
+    'uniform mat4 uProj, uView;',
+    'uniform float uTime;',
+    'varying float vWave; varying float vDist;',
+    'void main() {',
+    '  float w = sin(aXZ.x * 0.25 + uTime * 1.1) * 0.35',
+    '          + sin(aXZ.y * 0.31 - uTime * 0.9) * 0.3',
+    '          + sin((aXZ.x + aXZ.y) * 0.12 + uTime * 0.6) * 0.5;',
+    '  vWave = w;',
+    '  vec4 mv = uView * vec4(aXZ.x, w, aXZ.y, 1.0);',
+    '  vDist = -mv.z;',
+    '  gl_Position = uProj * mv;',
+    '}'
+  ].join('\n');
+
+  var SEA_FS = [
+    'precision mediump float;',
+    'uniform vec3 uDeep, uShallow, uFog;',
+    'uniform float uFogNear, uFogFar;',
+    'varying float vWave; varying float vDist;',
+    'void main() {',
+    '  vec3 c = mix(uDeep, uShallow, clamp(vWave * 0.6 + 0.5, 0.0, 1.0));',
+    '  float f = clamp((vDist - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0);',
+    '  gl_FragColor = vec4(mix(c, uFog, f), 0.92);',
+    '}'
+  ].join('\n');
+
+  var PART_VS = [
+    'attribute vec3 aPos;',
+    'attribute float aSize;',
+    'attribute vec3 aCol;',
+    'attribute float aLife;',
+    'uniform mat4 uProj, uView;',
+    'varying vec3 vCol; varying float vLife;',
+    'void main() {',
+    '  vec4 mv = uView * vec4(aPos, 1.0);',
+    '  vCol = aCol; vLife = aLife;',
+    '  gl_PointSize = max(1.0, aSize * 320.0 / max(1.0, -mv.z));',
+    '  gl_Position = uProj * mv;',
+    '}'
+  ].join('\n');
+
+  var PART_FS = [
+    'precision mediump float;',
+    'varying vec3 vCol; varying float vLife;',
+    'void main() {',
+    '  vec2 d = gl_PointCoord - vec2(0.5);',
+    '  float r = dot(d, d);',
+    '  if (r > 0.25) discard;',
+    '  float a = (1.0 - r * 4.0) * vLife;',
+    '  gl_FragColor = vec4(vCol * a, a);',
+    '}'
+  ].join('\n');
+
+  /* ---------------------------------------------------------------- setup */
+  function init(canvas) {
+    /* try every context name and option combination before giving up: some
+       sandboxes refuse the first request but allow a plainer one */
+    var gl = null;
+    var names = ['webgl2', 'webgl', 'experimental-webgl', 'moz-webgl', 'webkit-3d'];
+    var opts = [
+      { antialias: true, alpha: false },
+      { antialias: false, alpha: false },
+      { antialias: false, alpha: true, failIfMajorPerformanceCaveat: false },
+      undefined
+    ];
+    for (var n = 0; n < names.length && !gl; n++) {
+      for (var o = 0; o < opts.length && !gl; o++) {
+        try { gl = canvas.getContext(names[n], opts[o]); } catch (e) { gl = null; }
+      }
+    }
+    if (!gl) { return null; }
+    try {
+
+    var api = {
+      gl: gl,
+      terrain: program(gl, TERRAIN_VS, TERRAIN_FS),
+      sea: program(gl, SEA_VS, SEA_FS),
+      part: program(gl, PART_VS, PART_FS),
+      buf: {}
+    };
+
+    ['terrain', 'sea', 'part'].forEach(function (k) {
+      var p = api[k];
+      api[k + 'U'] = {};
+      var n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+      for (var i = 0; i < n; i++) {
+        var info = gl.getActiveUniform(p, i);
+        api[k + 'U'][info.name] = gl.getUniformLocation(p, info.name);
+      }
+      api[k + 'A'] = {};
+      var m = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES);
+      for (var j = 0; j < m; j++) {
+        var ai = gl.getActiveAttrib(p, j);
+        api[k + 'A'][ai.name] = gl.getAttribLocation(p, ai.name);
+      }
+    });
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    return api;
+    } catch (err) {
+      /* shaders refused to compile: the caller should use the software path */
+      return null;
+    }
+  }
+
+  function buffer(gl, data, type) {
+    var b = gl.createBuffer();
+    gl.bindBuffer(type || gl.ARRAY_BUFFER, b);
+    gl.bufferData(type || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    return b;
+  }
+
+  function dynamicBuffer(gl, size) {
+    var b = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, size * 4, gl.DYNAMIC_DRAW);
+    return b;
+  }
+
+  return {
+    init: init, buffer: buffer, dynamicBuffer: dynamicBuffer,
+    perspective: perspective, lookAt: lookAt, multiply: multiply, mat4: mat4
+  };
+})();
+
+</script>
+
+<script>
+/* ============================================================================
+   TERRAIN — the island as a real heightfield.
+
+   Two height fields are built over the same grid:
+     young  : one shield volcano, a smooth cone with a summit crater
+     modern : today's Mauritius — a low coastal ring rising to the real peaks
+   Erosion interpolates between them, so "wear the mountain down" is literal.
+   ============================================================================ */
+var TERRAIN = (function () {
+  'use strict';
+
+  var N = 150;                 /* grid resolution */
+  var VSCALE = 0.014;          /* metres of height per km of plan — vertical exaggeration */
+
+  function build(island) {
+    var coast = island.coast, peaks = island.peaks;
+    var minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    coast.forEach(function (p) {
+      if (p[0] < minX) { minX = p[0]; }
+      if (p[0] > maxX) { maxX = p[0]; }
+      if (p[1] < minZ) { minZ = p[1]; }
+      if (p[1] > maxZ) { maxZ = p[1]; }
+    });
+    var pad = 16;
+    minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
+
+    var cxIsland = 0, czIsland = 0;   /* the young cone sat near the centre */
+
+    function inside(x, z) {
+      var c = false;
+      for (var i = 0, j = coast.length - 1; i < coast.length; j = i++) {
+        var xi = coast[i][0], zi = coast[i][1], xj = coast[j][0], zj = coast[j][1];
+        if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi + 1e-9) + xi)) { c = !c; }
+      }
+      return c;
+    }
+
+    /* distance to the nearest coast segment, in km */
+    function coastDist(x, z) {
+      var best = 1e9;
+      for (var i = 0, j = coast.length - 1; i < coast.length; j = i++) {
+        var x1 = coast[j][0], z1 = coast[j][1], x2 = coast[i][0], z2 = coast[i][1];
+        var dx = x2 - x1, dz = z2 - z1;
+        var t = ((x - x1) * dx + (z - z1) * dz) / (dx * dx + dz * dz + 1e-9);
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        var px = x1 + dx * t, pz = z1 + dz * t;
+        var d = (x - px) * (x - px) + (z - pz) * (z - pz);
+        if (d < best) { best = d; }
+      }
+      return Math.sqrt(best);
+    }
+
+    function noise(x, z) {
+      return Math.sin(x * 0.7 + z * 0.31) * 0.5
+           + Math.sin(x * 0.23 - z * 0.61) * 0.35
+           + Math.sin((x + z) * 1.31) * 0.18;
+    }
+
+    /* --- height fields, in metres --- */
+    function modernH(x, z, inIsland, d) {
+      if (!inIsland) { return -Math.min(3200, 60 + d * d * 26); }   /* the shelf then the deep */
+      /* coastal plain rising to the central plateau */
+      var h = Math.min(d * 30, 380);
+      /* summits take the maximum, never the sum: two peaks 2 km apart are two
+         peaks, not one 1,700 m monster */
+      peaks.forEach(function (p) {
+        var dx = x - p[1], dz = z - p[2];
+        var r = p[4];
+        var g = p[3] * Math.exp(-(dx * dx + dz * dz) / (2 * r * r));
+        h = Math.max(h, g);
+      });
+      h += noise(x, z) * 26 * Math.min(1, d / 3);                    /* ravines inland only */
+      return h;
+    }
+
+    function youngH(x, z, inIsland, d) {
+      if (!inIsland) { return -Math.min(3200, 60 + d * d * 26); }
+      var dx = x - cxIsland, dz = z - czIsland;
+      var r = Math.sqrt(dx * dx + dz * dz);
+      var R = 30;                                                    /* radius of the shield */
+      var h = 2100 * Math.exp(-(r * r) / (2 * (R * 0.55) * (R * 0.55)));
+      /* summit crater */
+      var crater = Math.exp(-(r * r) / (2 * 2.2 * 2.2)) * 420;
+      return Math.max(30, h - crater) + noise(x, z) * 12;
+    }
+
+    /* --- sample both fields on the grid --- */
+    var young = new Float32Array(N * N);
+    var modern = new Float32Array(N * N);
+    var xs = new Float32Array(N), zs = new Float32Array(N);
+    for (var i = 0; i < N; i++) {
+      xs[i] = minX + (maxX - minX) * i / (N - 1);
+      zs[i] = minZ + (maxZ - minZ) * i / (N - 1);
+    }
+    for (var iz = 0; iz < N; iz++) {
+      for (var ix = 0; ix < N; ix++) {
+        var x = xs[ix], z = zs[iz];
+        var ins = inside(x, z);
+        var d = coastDist(x, z);
+        var k = iz * N + ix;
+        young[k] = youngH(x, z, ins, d);
+        modern[k] = modernH(x, z, ins, d);
+      }
+    }
+
+    /* --- vertex buffers --- */
+    var verts = new Float32Array(N * N * 3);
+    var cols = new Float32Array(N * N * 3);
+    var nrms = new Float32Array(N * N * 3);
+    var idx = [];
+    for (var z2 = 0; z2 < N - 1; z2++) {
+      for (var x2 = 0; x2 < N - 1; x2++) {
+        var a = z2 * N + x2, b = a + 1, c2 = a + N, dd = c2 + 1;
+        idx.push(a, c2, b, b, c2, dd);
+      }
+    }
+
+    var api = {
+      N: N, xs: xs, zs: zs, young: young, modern: modern,
+      verts: verts, cols: cols, nrms: nrms,
+      index: new Uint32Array(idx),
+      minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ,
+      height: new Float32Array(N * N)
+    };
+
+    /* mix the two fields and refresh vertices, normals and colour */
+    api.update = function (erosion, greenness) {
+      var h = api.height;
+      for (var k = 0; k < N * N; k++) {
+        h[k] = young[k] + (modern[k] - young[k]) * erosion;
+      }
+      for (var iz2 = 0; iz2 < N; iz2++) {
+        for (var ix2 = 0; ix2 < N; ix2++) {
+          var kk = iz2 * N + ix2;
+          var hh = h[kk];
+          verts[kk * 3] = xs[ix2];
+          verts[kk * 3 + 1] = hh * VSCALE;
+          verts[kk * 3 + 2] = zs[iz2];
+
+          /* normal from neighbouring samples */
+          var l = h[iz2 * N + Math.max(0, ix2 - 1)];
+          var r2 = h[iz2 * N + Math.min(N - 1, ix2 + 1)];
+          var u = h[Math.max(0, iz2 - 1) * N + ix2];
+          var dn = h[Math.min(N - 1, iz2 + 1) * N + ix2];
+          var stepX = (xs[1] - xs[0]) || 1, stepZ = (zs[1] - zs[0]) || 1;
+          var nx = (l - r2) * VSCALE, ny = 2 * stepX, nz = (u - dn) * VSCALE;
+          var len = Math.hypot(nx, ny, nz) || 1;
+          nrms[kk * 3] = nx / len; nrms[kk * 3 + 1] = ny / len; nrms[kk * 3 + 2] = nz / len;
+
+          /* colour by height: reef sand, then green, then bare rock */
+          var cr, cg, cb;
+          if (hh < 0) { cr = 0.06; cg = 0.16; cb = 0.22; }
+          else if (hh < 30) { cr = 0.78; cg = 0.72; cb = 0.55; }
+          else if (hh < 420) {
+            var g = Math.min(1, hh / 420);
+            cr = 0.20 - g * 0.08; cg = 0.36 + g * 0.06; cb = 0.16;
+          } else {
+            var m = Math.min(1, (hh - 420) / 700);
+            cr = 0.22 + m * 0.20; cg = 0.24 + m * 0.14; cb = 0.18 + m * 0.14;
+          }
+          /* before life arrives, the island is bare basalt */
+          var bare = 1 - greenness;
+          cr = cr * (1 - bare) + (0.16 + hh / 9000) * bare;
+          cg = cg * (1 - bare) + (0.12 + hh / 12000) * bare;
+          cb = cb * (1 - bare) + (0.11 + hh / 14000) * bare;
+
+          cols[kk * 3] = cr; cols[kk * 3 + 1] = cg; cols[kk * 3 + 2] = cb;
+        }
+      }
+    };
+
+    /* height in world units at a plan position, for placing things on the ground */
+    api.at = function (x, z) {
+      var fx = (x - minX) / (maxX - minX) * (N - 1);
+      var fz = (z - minZ) / (maxZ - minZ) * (N - 1);
+      var ix3 = Math.max(0, Math.min(N - 2, Math.floor(fx)));
+      var iz3 = Math.max(0, Math.min(N - 2, Math.floor(fz)));
+      var tx = fx - ix3, tz = fz - iz3;
+      var h00 = api.height[iz3 * N + ix3], h10 = api.height[iz3 * N + ix3 + 1];
+      var h01 = api.height[(iz3 + 1) * N + ix3], h11 = api.height[(iz3 + 1) * N + ix3 + 1];
+      var h = h00 * (1 - tx) * (1 - tz) + h10 * tx * (1 - tz) + h01 * (1 - tx) * tz + h11 * tx * tz;
+      return h * VSCALE;
+    };
+
+    api.VSCALE = VSCALE;
+    api.update(1, 1);
+    return api;
+  }
+
+  return { build: build, N: N };
+})();
+
+</script>
+
+<script>
+/* ============================================================================
+   SCENE — ties the engine to the story. Scroll drives a camera flight over the
+   real island, the eruption, the erosion, and the markers on named places.
+   ============================================================================ */
+(function () {
+  'use strict';
+
+  var canvas = document.getElementById('gl');
+  var api = GL.init(canvas);
+  var overlay = document.getElementById('marks');
+  var eraEl = document.getElementById('era');
+  var hintEl = document.getElementById('hint');
+
+  if (!api) {
+    document.getElementById('fallback').hidden = false;
+    return;
+  }
+  var gl = api.gl;
+
+  var land = TERRAIN.build(ISLAND);
+  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var p = 0, time = 0;
+
+  /* what the story has done to the world */
+  var S = { erosion: 0, green: 0, lift: 0.12, lava: 0, built: 0, spin: 0, drag: 0 };
+
+  /* ---------------------------------------------------------------- buffers */
+  var vBuf = gl.createBuffer(), nBuf = gl.createBuffer(), cBuf = gl.createBuffer();
+  var iBuf = gl.createBuffer();
+  var ext = gl.getExtension('OES_element_index_uint');
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? land.index : new Uint16Array(land.index), gl.STATIC_DRAW);
+
+  function pushTerrain() {
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, land.verts, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, nBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, land.nrms, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, cBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, land.cols, gl.DYNAMIC_DRAW);
+  }
+  land.update(0, 0);
+  pushTerrain();
+
+  /* sea: a big grid so the waves have somewhere to happen */
+  var SEA_N = 90, SEA_R = 150;
+  var seaXZ = [], seaIdx = [];
+  for (var sz = 0; sz < SEA_N; sz++) {
+    for (var sx = 0; sx < SEA_N; sx++) {
+      seaXZ.push(-SEA_R + (2 * SEA_R) * sx / (SEA_N - 1), -SEA_R + (2 * SEA_R) * sz / (SEA_N - 1));
+    }
+  }
+  for (var qz = 0; qz < SEA_N - 1; qz++) {
+    for (var qx = 0; qx < SEA_N - 1; qx++) {
+      var a = qz * SEA_N + qx, b = a + 1, c = a + SEA_N, d = c + 1;
+      seaIdx.push(a, c, b, b, c, d);
+    }
+  }
+  var seaBuf = GL.buffer(gl, new Float32Array(seaXZ));
+  var seaIBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, seaIBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? new Uint32Array(seaIdx) : new Uint16Array(seaIdx), gl.STATIC_DRAW);
+
+  /* ---------------------------------------------------------------- particles */
+  var PMAX = 1400;
+  var pPos = new Float32Array(PMAX * 3);
+  var pCol = new Float32Array(PMAX * 3);
+  var pSize = new Float32Array(PMAX);
+  var pLife = new Float32Array(PMAX);
+  var pVel = new Float32Array(PMAX * 3);
+  var pAge = new Float32Array(PMAX);
+  var pKind = new Uint8Array(PMAX);      /* 0 lava, 1 ash, 2 steam */
+  var pNext = 0;
+
+  var posBuf = GL.dynamicBuffer(gl, PMAX * 3);
+  var colBuf = GL.dynamicBuffer(gl, PMAX * 3);
+  var sizeBuf = GL.dynamicBuffer(gl, PMAX);
+  var lifeBuf = GL.dynamicBuffer(gl, PMAX);
+
+  var ventX = 0, ventZ = 0;
+
+  function spawn(kind, power) {
+    var i = pNext; pNext = (pNext + 1) % PMAX;
+    var ang = Math.random() * Math.PI * 2;
+    var spread = kind === 0 ? 0.5 + power * 1.4 : 0.7;
+    pPos[i * 3] = ventX + Math.cos(ang) * Math.random() * 1.4;
+    pPos[i * 3 + 1] = land.at(ventX, ventZ) + 0.4;
+    pPos[i * 3 + 2] = ventZ + Math.sin(ang) * Math.random() * 1.4;
+    var up = kind === 0 ? (0.55 + Math.random() * 0.9) * (0.5 + power) : 0.30 + Math.random() * 0.35;
+    pVel[i * 3] = Math.cos(ang) * spread * Math.random() * 0.5;
+    pVel[i * 3 + 1] = up;
+    pVel[i * 3 + 2] = Math.sin(ang) * spread * Math.random() * 0.5;
+    pAge[i] = 0;
+    pKind[i] = kind;
+    pSize[i] = kind === 0 ? 0.05 + Math.random() * 0.09 : 0.12 + Math.random() * 0.2;
+    pLife[i] = 1;
+  }
+
+  function stepParticles(dt) {
+    for (var i = 0; i < PMAX; i++) {
+      if (pLife[i] <= 0) { continue; }
+      pAge[i] += dt;
+      var maxAge = pKind[i] === 0 ? 2.6 : 7.5;
+      pLife[i] = Math.max(0, 1 - pAge[i] / maxAge);
+      pVel[i * 3 + 1] -= (pKind[i] === 0 ? 0.55 : -0.06) * dt;   /* ash keeps rising */
+      pPos[i * 3] += pVel[i * 3] * dt * 6;
+      pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt * 6;
+      pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt * 6;
+      if (pKind[i] === 1) {
+        pPos[i * 3] += 0.6 * dt;                                  /* the plume leans downwind */
+        pVel[i * 3] *= 1.004;
+      }
+      var ground = land.at(pPos[i * 3], pPos[i * 3 + 2]);
+      if (pPos[i * 3 + 1] < ground) { pLife[i] = 0; }
+
+      var l = pLife[i];
+      if (pKind[i] === 0) {
+        pCol[i * 3] = 1; pCol[i * 3 + 1] = 0.35 + l * 0.5; pCol[i * 3 + 2] = 0.08 * l;
+      } else {
+        var g = 0.34 + (1 - l) * 0.18;
+        pCol[i * 3] = g; pCol[i * 3 + 1] = g * 0.96; pCol[i * 3 + 2] = g * 0.92;
+      }
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pPos);
+    gl.bindBuffer(gl.ARRAY_BUFFER, colBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pCol);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pSize);
+    gl.bindBuffer(gl.ARRAY_BUFFER, lifeBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pLife);
+  }
+
+  /* ---------------------------------------------------------------- camera */
+  /* keyframes: [scrollPos, distance, height, yaw, pitchTarget, lookY] */
+  var SHOTS = [
+    [0.00, 120, -34, 0.5, 0, -20],     /* under the sea, looking up at the vent */
+    [0.12, 95, 12, 0.9, 0, 2],         /* the eruption from sea level */
+    [0.26, 78, 30, 1.5, 0, 6],         /* watching the shield build */
+    [0.40, 96, 52, 2.4, 0, 4],         /* erosion, from higher */
+    [0.52, 120, 96, 3.4, 0, 0],        /* the whole island, map-like */
+    [0.64, 70, 34, 4.3, 0, 3],         /* down to the coast: ships arrive */
+    [0.76, 52, 20, 5.0, 0, 2],         /* Port Louis */
+    [0.88, 60, 26, 5.9, 0, 2],         /* Le Morne */
+    [1.00, 150, 120, 6.6, 0, 0]        /* pull out, night */
+  ];
+
+  function shot() {
+    for (var i = 0; i < SHOTS.length - 1; i++) {
+      if (p >= SHOTS[i][0] && p <= SHOTS[i + 1][0]) {
+        var a = SHOTS[i], b = SHOTS[i + 1];
+        var k = (p - a[0]) / (b[0] - a[0]);
+        k = k * k * (3 - 2 * k);
+        return [
+          a[1] + (b[1] - a[1]) * k,
+          a[2] + (b[2] - a[2]) * k,
+          a[3] + (b[3] - a[3]) * k,
+          0,
+          a[5] + (b[5] - a[5]) * k
+        ];
+      }
+    }
+    var l = SHOTS[SHOTS.length - 1];
+    return [l[1], l[2], l[3], 0, l[5]];
+  }
+
+  /* ---------------------------------------------------------------- markers */
+  var markEls = ISLAND.places.map(function (pl) {
+    var el = document.createElement('span');
+    el.className = 'mark';
+    el.innerHTML = '<i></i><b>' + pl[0] + '</b><em>' + pl[3] + '</em>';
+    overlay.appendChild(el);
+    return el;
+  });
+
+  function project(x, y, z, mvp) {
+    var cx = mvp[0] * x + mvp[4] * y + mvp[8] * z + mvp[12];
+    var cy = mvp[1] * x + mvp[5] * y + mvp[9] * z + mvp[13];
+    var cw = mvp[3] * x + mvp[7] * y + mvp[11] * z + mvp[15];
+    if (cw <= 0.001) { return null; }
+    return [(cx / cw * 0.5 + 0.5) * W, (1 - (cy / cw * 0.5 + 0.5)) * H];
+  }
+
+  /* ---------------------------------------------------------------- frame */
+  var last = performance.now();
+
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    time += dt;
+
+    /* the volcano settles when you stop holding */
+    S.lava = Math.max(0, S.lava - dt * 0.35);
+
+    /* spawn while it is live */
+    var burn = Math.max(S.lava, p < 0.34 ? (1 - Math.abs(p - 0.18) / 0.18) * 0.75 : 0);
+    if (burn > 0.02) {
+      var n = Math.round(burn * 9);
+      for (var s = 0; s < n; s++) { spawn(0, burn); }
+      if (Math.random() < burn * 0.9) { spawn(1, burn); }
+    }
+    stepParticles(dt);
+
+    var c = shot();
+    var yaw = c[2] + S.drag;
+    var eye = [Math.cos(yaw) * c[0], c[1], Math.sin(yaw) * c[0]];
+    var proj = GL.perspective(Math.PI / 3.6, W / H, 0.6, 900);
+    var view = GL.lookAt(eye, [0, c[4], 0], [0, 1, 0]);
+    var mvp = GL.multiply(proj, view);
+
+    /* sky colour travels with the story */
+    var night = p > 0.9 ? (p - 0.9) / 0.1 : (p < 0.08 ? 1 - p / 0.08 : 0);
+    var fog = [0.05 + 0.12 * (1 - night), 0.09 + 0.16 * (1 - night), 0.14 + 0.2 * (1 - night)];
+    gl.clearColor(fog[0], fog[1], fog[2], 1);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    /* ---- terrain ---- */
+    gl.useProgram(api.terrain);
+    gl.uniformMatrix4fv(api.terrainU.uProj, false, proj);
+    gl.uniformMatrix4fv(api.terrainU.uView, false, view);
+    gl.uniform3f(api.terrainU.uLight, 0.5, 0.8, 0.35);
+    gl.uniform3fv(api.terrainU.uFog, new Float32Array(fog));
+    gl.uniform1f(api.terrainU.uFogNear, 60);
+    gl.uniform1f(api.terrainU.uFogFar, 460);
+    gl.uniform1f(api.terrainU.uLift, S.lift);
+    gl.uniform1f(api.terrainU.uLava, Math.min(1, burn * 1.4));
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
+    gl.enableVertexAttribArray(api.terrainA.aPos);
+    gl.vertexAttribPointer(api.terrainA.aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, nBuf);
+    gl.enableVertexAttribArray(api.terrainA.aNrm);
+    gl.vertexAttribPointer(api.terrainA.aNrm, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, cBuf);
+    gl.enableVertexAttribArray(api.terrainA.aCol);
+    gl.vertexAttribPointer(api.terrainA.aCol, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
+    gl.drawElements(gl.TRIANGLES, land.index.length, ext ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+
+    /* ---- sea ---- */
+    gl.useProgram(api.sea);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniformMatrix4fv(api.seaU.uProj, false, proj);
+    gl.uniformMatrix4fv(api.seaU.uView, false, view);
+    gl.uniform1f(api.seaU.uTime, time);
+    gl.uniform3f(api.seaU.uDeep, 0.02, 0.10, 0.17);
+    gl.uniform3f(api.seaU.uShallow, 0.10 + 0.1 * (1 - night), 0.42, 0.44);
+    gl.uniform3fv(api.seaU.uFog, new Float32Array(fog));
+    gl.uniform1f(api.seaU.uFogNear, 60);
+    gl.uniform1f(api.seaU.uFogFar, 460);
+    gl.bindBuffer(gl.ARRAY_BUFFER, seaBuf);
+    gl.enableVertexAttribArray(api.seaA.aXZ);
+    gl.vertexAttribPointer(api.seaA.aXZ, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, seaIBuf);
+    gl.drawElements(gl.TRIANGLES, seaIdx.length, ext ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+
+    /* ---- particles, additive ---- */
+    gl.useProgram(api.part);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.depthMask(false);
+    gl.uniformMatrix4fv(api.partU.uProj, false, proj);
+    gl.uniformMatrix4fv(api.partU.uView, false, view);
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+    gl.enableVertexAttribArray(api.partA.aPos);
+    gl.vertexAttribPointer(api.partA.aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+    gl.enableVertexAttribArray(api.partA.aCol);
+    gl.vertexAttribPointer(api.partA.aCol, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf);
+    gl.enableVertexAttribArray(api.partA.aSize);
+    gl.vertexAttribPointer(api.partA.aSize, 1, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, lifeBuf);
+    gl.enableVertexAttribArray(api.partA.aLife);
+    gl.vertexAttribPointer(api.partA.aLife, 1, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.POINTS, 0, PMAX);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+
+    /* ---- html markers, only once the map view opens ---- */
+    var showMarks = p > 0.46 && S.lift > 0.7;
+    ISLAND.places.forEach(function (pl, i) {
+      var el = markEls[i];
+      if (!showMarks) { el.classList.remove('on'); return; }
+      var y = land.at(pl[1], pl[2]) + 0.6;
+      var sp = project(pl[1], y * S.lift, pl[2], mvp);
+      if (!sp || sp[0] < 40 || sp[0] > W - 40 || sp[1] < 60 || sp[1] > H - 60) {
+        el.classList.remove('on');
+        return;
+      }
+      el.style.transform = 'translate(' + sp[0].toFixed(1) + 'px,' + sp[1].toFixed(1) + 'px)';
+      el.classList.add('on');
+    });
+
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------------------------------------------------------------- input */
+  function onScroll() {
+    var max = document.body.scrollHeight - window.innerHeight;
+    p = max > 0 ? Math.max(0, Math.min(1, window.scrollY / max)) : 0;
+
+    /* the island rises out of the sea, then erodes, then greens */
+    var lift = Math.max(S.built, Math.min(1, Math.max(0, (p - 0.06) / 0.2)));
+    var erosion = Math.min(1, Math.max(0, (p - 0.30) / 0.16));
+    var green = Math.min(1, Math.max(0, (p - 0.44) / 0.12));
+    if (Math.abs(erosion - S.erosion) > 0.004 || Math.abs(green - S.green) > 0.004) {
+      S.erosion = erosion; S.green = green;
+      land.update(erosion, green);
+      pushTerrain();
+    }
+    S.lift = lift;
+
+    var era = document.querySelectorAll('.beat');
+    var seen = null;
+    Array.prototype.forEach.call(era, function (b) {
+      var r = b.getBoundingClientRect();
+      if (r.top < window.innerHeight * 0.6 && r.bottom > window.innerHeight * 0.3) { seen = b; }
+      var card = b.querySelector('.card');
+      if (card) { card.classList.toggle('in', r.top < window.innerHeight * 0.8 && r.bottom > window.innerHeight * 0.15); }
+    });
+    if (seen && eraEl) { eraEl.textContent = seen.getAttribute('data-era') || ''; }
+    if (hintEl && window.scrollY > 60) { hintEl.classList.add('gone'); }
+  }
+
+  /* drag to look around */
+  var dragging = false, lastX = 0;
+  canvas.addEventListener('pointerdown', function (e) { dragging = true; lastX = e.clientX; });
+  window.addEventListener('pointerup', function () { dragging = false; });
+  window.addEventListener('pointermove', function (e) {
+    if (!dragging) { return; }
+    S.drag += (e.clientX - lastX) * 0.006;
+    lastX = e.clientX;
+  });
+
+  /* hold to erupt: this is what builds the island */
+  var eruptBtn = document.getElementById('erupt');
+  var eruptOut = document.getElementById('eruptOut');
+  if (eruptBtn) {
+    var holding = false;
+    function hold() {
+      if (!holding) { return; }
+      S.lava = Math.min(1, S.lava + 0.06);
+      S.built = Math.min(1, S.built + 0.004);
+      S.lift = Math.max(S.lift, S.built);
+      if (eruptOut) {
+        eruptOut.textContent = S.built >= 1 ? 'Two million years of it.' : Math.round(S.built * 100) + '% risen';
+      }
+      requestAnimationFrame(hold);
+    }
+    eruptBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); holding = true; eruptBtn.classList.add('hot'); hold(); });
+    window.addEventListener('pointerup', function () { holding = false; eruptBtn.classList.remove('hot'); });
+  }
+
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.floor(W * DPR); canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    onScroll();
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>
