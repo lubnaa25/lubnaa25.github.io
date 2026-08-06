@@ -78,16 +78,14 @@
   .hero h1 em { display: block; font-style: italic; color: var(--ember); }
   .hero p { max-width: 29rem; margin: 0 auto; color: var(--dim); line-height: 1.62; }
 
-  #fallback { position: fixed; inset: 0; display: grid; place-items: center; background: #050A10; z-index: 9; padding: 2rem; text-align: center; }
   @media (max-width: 640px) { .beat { padding: 9vh 1rem; } .beat--right { justify-items: start; text-align: left; } }
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
 <div id="marks"></div>
-<div class="hud"><span id="era">the seafloor</span><span>drag to look</span></div>
+<div class="hud"><span id="era">the seafloor</span><span><span id="mode">starting</span> &middot; drag to look</span></div>
 <p class="hint" id="hint">Scroll</p>
-<div id="fallback" hidden><p>This page needs WebGL. Try another browser.</p></div>
 
 <main>
   <section class="hero"><div>
@@ -566,6 +564,183 @@ var TERRAIN = (function () {
 
 <script>
 /* ============================================================================
+   SOFTWARE 3D — the same island, rendered on a 2D canvas.
+
+   Used when WebGL is unavailable (hardware acceleration off, driver on Chrome's
+   blocklist, locked-down browser). Painter's algorithm: project every quad,
+   sort back to front, shade with a lambert term, fill. Coarser than the GPU
+   path but the same geometry, the same camera and the same colours.
+   ============================================================================ */
+var SOFT = (function () {
+  'use strict';
+
+  function init(canvas, land) {
+    var ctx = canvas.getContext('2d');
+    if (!ctx) { return null; }
+
+    var STEP = 3;                       /* sample every 3rd terrain vertex */
+    var N = land.N;
+    var quads = [];                     /* reused each frame, never reallocated */
+    var order = [];
+
+    for (var z = 0; z + STEP < N; z += STEP) {
+      for (var x = 0; x + STEP < N; x += STEP) {
+        quads.push({ a: z * N + x, b: z * N + x + STEP, c: (z + STEP) * N + x + STEP, d: (z + STEP) * N + x, depth: 0, kind: 0 });
+      }
+    }
+
+    /* the sea as its own coarse grid */
+    var SEA_R = 130, SEA_N = 22, sea = [];
+    for (var sz = 0; sz < SEA_N - 1; sz++) {
+      for (var sx = 0; sx < SEA_N - 1; sx++) {
+        var x0 = -SEA_R + 2 * SEA_R * sx / (SEA_N - 1);
+        var x1 = -SEA_R + 2 * SEA_R * (sx + 1) / (SEA_N - 1);
+        var z0 = -SEA_R + 2 * SEA_R * sz / (SEA_N - 1);
+        var z1 = -SEA_R + 2 * SEA_R * (sz + 1) / (SEA_N - 1);
+        sea.push({ x0: x0, x1: x1, z0: z0, z1: z1, depth: 0, kind: 1 });
+      }
+    }
+
+    var P = { x: 0, y: 0, w: 0 };
+
+    function project(mvp, x, y, z, W, H, out) {
+      var cx = mvp[0] * x + mvp[4] * y + mvp[8] * z + mvp[12];
+      var cy = mvp[1] * x + mvp[5] * y + mvp[9] * z + mvp[13];
+      var cw = mvp[3] * x + mvp[7] * y + mvp[11] * z + mvp[15];
+      if (cw <= 0.02) { return false; }
+      out.x = (cx / cw * 0.5 + 0.5) * W;
+      out.y = (1 - (cy / cw * 0.5 + 0.5)) * H;
+      out.w = cw;
+      return true;
+    }
+
+    var pa = { x: 0, y: 0, w: 0 }, pb = { x: 0, y: 0, w: 0 }, pc = { x: 0, y: 0, w: 0 }, pd = { x: 0, y: 0, w: 0 };
+
+    function draw(opts) {
+      var W = opts.W, H = opts.H, mvp = opts.mvp, lift = opts.lift, time = opts.time;
+      var fog = opts.fog, lava = opts.lava, eye = opts.eye;
+
+      ctx.setTransform(opts.dpr, 0, 0, opts.dpr, 0, 0);
+      ctx.fillStyle = 'rgb(' + (fog[0] * 255 | 0) + ',' + (fog[1] * 255 | 0) + ',' + (fog[2] * 255 | 0) + ')';
+      ctx.fillRect(0, 0, W, H);
+
+      var verts = land.verts, cols = land.cols, nrms = land.nrms;
+      order.length = 0;
+
+      /* terrain quads */
+      for (var q = 0; q < quads.length; q++) {
+        var Q = quads[q];
+        var ia = Q.a * 3, ib = Q.b * 3, ic = Q.c * 3, id = Q.d * 3;
+        if (!project(mvp, verts[ia], verts[ia + 1] * lift, verts[ia + 2], W, H, pa)) { continue; }
+        if (!project(mvp, verts[ib], verts[ib + 1] * lift, verts[ib + 2], W, H, pb)) { continue; }
+        if (!project(mvp, verts[ic], verts[ic + 1] * lift, verts[ic + 2], W, H, pc)) { continue; }
+        if (!project(mvp, verts[id], verts[id + 1] * lift, verts[id + 2], W, H, pd)) { continue; }
+
+        var minx = Math.min(pa.x, pb.x, pc.x, pd.x), maxx = Math.max(pa.x, pb.x, pc.x, pd.x);
+        var miny = Math.min(pa.y, pb.y, pc.y, pd.y), maxy = Math.max(pa.y, pb.y, pc.y, pd.y);
+        if (maxx < -20 || minx > W + 20 || maxy < -20 || miny > H + 20) { continue; }
+
+        Q.depth = (pa.w + pb.w + pc.w + pd.w) * 0.25;
+        Q.sx = [pa.x, pb.x, pc.x, pd.x];
+        Q.sy = [pa.y, pb.y, pc.y, pd.y];
+
+        /* lambert from the quad's own normal */
+        var nx = nrms[ia], ny = nrms[ia + 1], nz = nrms[ia + 2];
+        var lam = Math.max(0, nx * 0.42 + ny * 0.83 + nz * 0.36);
+        var shade = 0.34 + 0.72 * lam;
+        var r = cols[ia] * shade, g = cols[ia + 1] * shade, b = cols[ia + 2] * shade;
+
+        /* hot summit rock while it is erupting */
+        var hh = verts[ia + 1] / land.VSCALE;
+        if (lava > 0.02 && hh > 300) {
+          var hot = Math.min(1, (hh - 300) / 600) * lava * 0.85;
+          r = r * (1 - hot) + 1.0 * hot;
+          g = g * (1 - hot) + 0.42 * hot;
+          b = b * (1 - hot) + 0.12 * hot;
+        }
+
+        /* distance fog */
+        var f = Math.min(1, Math.max(0, (Q.depth - 60) / 400));
+        r = r * (1 - f) + fog[0] * f; g = g * (1 - f) + fog[1] * f; b = b * (1 - f) + fog[2] * f;
+
+        Q.fill = 'rgb(' + (r * 255 | 0) + ',' + (g * 255 | 0) + ',' + (b * 255 | 0) + ')';
+        order.push(Q);
+      }
+
+      /* sea quads */
+      for (var s = 0; s < sea.length; s++) {
+        var S = sea[s];
+        function wave(x, z) {
+          return Math.sin(x * 0.25 + time * 1.1) * 0.35 + Math.sin(z * 0.31 - time * 0.9) * 0.3
+               + Math.sin((x + z) * 0.12 + time * 0.6) * 0.5;
+        }
+        if (!project(mvp, S.x0, wave(S.x0, S.z0), S.z0, W, H, pa)) { continue; }
+        if (!project(mvp, S.x1, wave(S.x1, S.z0), S.z0, W, H, pb)) { continue; }
+        if (!project(mvp, S.x1, wave(S.x1, S.z1), S.z1, W, H, pc)) { continue; }
+        if (!project(mvp, S.x0, wave(S.x0, S.z1), S.z1, W, H, pd)) { continue; }
+
+        var sminx = Math.min(pa.x, pb.x, pc.x, pd.x), smaxx = Math.max(pa.x, pb.x, pc.x, pd.x);
+        var sminy = Math.min(pa.y, pb.y, pc.y, pd.y), smaxy = Math.max(pa.y, pb.y, pc.y, pd.y);
+        if (smaxx < -20 || sminx > W + 20 || smaxy < -20 || sminy > H + 20) { continue; }
+
+        S.depth = (pa.w + pb.w + pc.w + pd.w) * 0.25;
+        S.sx = [pa.x, pb.x, pc.x, pd.x];
+        S.sy = [pa.y, pb.y, pc.y, pd.y];
+        var wv = wave((S.x0 + S.x1) / 2, (S.z0 + S.z1) / 2);
+        var k = Math.min(1, Math.max(0, wv * 0.6 + 0.5));
+        var sr = 0.02 + k * 0.10, sg = 0.10 + k * 0.32, sb = 0.17 + k * 0.27;
+        var sf = Math.min(1, Math.max(0, (S.depth - 60) / 400));
+        sr = sr * (1 - sf) + fog[0] * sf; sg = sg * (1 - sf) + fog[1] * sf; sb = sb * (1 - sf) + fog[2] * sf;
+        S.fill = 'rgba(' + (sr * 255 | 0) + ',' + (sg * 255 | 0) + ',' + (sb * 255 | 0) + ',0.93)';
+        order.push(S);
+      }
+
+      /* particles as billboards */
+      var parts = opts.particles;
+      for (var i = 0; i < parts.count; i++) {
+        if (parts.life[i] <= 0) { continue; }
+        if (!project(mvp, parts.pos[i * 3], parts.pos[i * 3 + 1], parts.pos[i * 3 + 2], W, H, pa)) { continue; }
+        if (pa.x < -30 || pa.x > W + 30 || pa.y < -30 || pa.y > H + 30) { continue; }
+        order.push({
+          kind: 2, depth: pa.w, px: pa.x, py: pa.y,
+          pr: Math.max(1, parts.size[i] * 340 / Math.max(1, pa.w)),
+          fill: 'rgba(' + (parts.col[i * 3] * 255 | 0) + ',' + (parts.col[i * 3 + 1] * 255 | 0) + ','
+                + (parts.col[i * 3 + 2] * 255 | 0) + ',' + parts.life[i].toFixed(2) + ')'
+        });
+      }
+
+      /* back to front */
+      order.sort(function (m, n) { return n.depth - m.depth; });
+
+      for (var o = 0; o < order.length; o++) {
+        var it = order[o];
+        ctx.fillStyle = it.fill;
+        if (it.kind === 2) {
+          ctx.beginPath();
+          ctx.arc(it.px, it.py, it.pr, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(it.sx[0], it.sy[0]);
+          ctx.lineTo(it.sx[1], it.sy[1]);
+          ctx.lineTo(it.sx[2], it.sy[2]);
+          ctx.lineTo(it.sx[3], it.sy[3]);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
+    return { draw: draw, quads: quads.length, sea: sea.length };
+  }
+
+  return { init: init };
+})();
+
+</script>
+
+<script>
+/* ============================================================================
    SCENE — ties the engine to the story. Scroll drives a camera flight over the
    real island, the eruption, the erosion, and the markers on named places.
    ============================================================================ */
@@ -578,13 +753,23 @@ var TERRAIN = (function () {
   var eraEl = document.getElementById('era');
   var hintEl = document.getElementById('hint');
 
+  /* why WebGL failed, if it did: shown in the corner so it is diagnosable */
+  var why = '';
   if (!api) {
-    document.getElementById('fallback').hidden = false;
-    return;
+    var probe = null;
+    try { probe = canvas.getContext('webgl') || canvas.getContext('experimental-webgl'); } catch (e) { probe = null; }
+    if (!probe) {
+      why = 'no WebGL context (hardware acceleration is probably off in this browser)';
+    } else {
+      var dbg = probe.getExtension('WEBGL_debug_renderer_info');
+      why = 'WebGL present but shaders refused' + (dbg ? ' on ' + probe.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '');
+    }
   }
-  var gl = api.gl;
+  var useSoft = !api;
+  var gl = api ? api.gl : null;
 
   var land = TERRAIN.build(ISLAND);
+  var soft = null;
   var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
   var p = 0, time = 0;
 
@@ -592,13 +777,17 @@ var TERRAIN = (function () {
   var S = { erosion: 0, green: 0, lift: 0.12, lava: 0, built: 0, spin: 0, drag: 0 };
 
   /* ---------------------------------------------------------------- buffers */
-  var vBuf = gl.createBuffer(), nBuf = gl.createBuffer(), cBuf = gl.createBuffer();
-  var iBuf = gl.createBuffer();
-  var ext = gl.getExtension('OES_element_index_uint');
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? land.index : new Uint16Array(land.index), gl.STATIC_DRAW);
+  var vBuf, nBuf, cBuf, iBuf, ext;
+  if (!useSoft) {
+    vBuf = gl.createBuffer(); nBuf = gl.createBuffer(); cBuf = gl.createBuffer();
+    iBuf = gl.createBuffer();
+    ext = gl.getExtension('OES_element_index_uint');
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, iBuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? land.index : new Uint16Array(land.index), gl.STATIC_DRAW);
+  }
 
   function pushTerrain() {
+    if (useSoft) { return; }
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
     gl.bufferData(gl.ARRAY_BUFFER, land.verts, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, nBuf);
@@ -623,10 +812,13 @@ var TERRAIN = (function () {
       seaIdx.push(a, c, b, b, c, d);
     }
   }
-  var seaBuf = GL.buffer(gl, new Float32Array(seaXZ));
-  var seaIBuf = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, seaIBuf);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? new Uint32Array(seaIdx) : new Uint16Array(seaIdx), gl.STATIC_DRAW);
+  var seaBuf, seaIBuf;
+  if (!useSoft) {
+    seaBuf = GL.buffer(gl, new Float32Array(seaXZ));
+    seaIBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, seaIBuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? new Uint32Array(seaIdx) : new Uint16Array(seaIdx), gl.STATIC_DRAW);
+  }
 
   /* ---------------------------------------------------------------- particles */
   var PMAX = 1400;
@@ -639,10 +831,13 @@ var TERRAIN = (function () {
   var pKind = new Uint8Array(PMAX);      /* 0 lava, 1 ash, 2 steam */
   var pNext = 0;
 
-  var posBuf = GL.dynamicBuffer(gl, PMAX * 3);
-  var colBuf = GL.dynamicBuffer(gl, PMAX * 3);
-  var sizeBuf = GL.dynamicBuffer(gl, PMAX);
-  var lifeBuf = GL.dynamicBuffer(gl, PMAX);
+  var posBuf, colBuf, sizeBuf, lifeBuf;
+  if (!useSoft) {
+    posBuf = GL.dynamicBuffer(gl, PMAX * 3);
+    colBuf = GL.dynamicBuffer(gl, PMAX * 3);
+    sizeBuf = GL.dynamicBuffer(gl, PMAX);
+    lifeBuf = GL.dynamicBuffer(gl, PMAX);
+  }
 
   var ventX = 0, ventZ = 0;
 
@@ -688,6 +883,7 @@ var TERRAIN = (function () {
         pCol[i * 3] = g; pCol[i * 3 + 1] = g * 0.96; pCol[i * 3 + 2] = g * 0.92;
       }
     }
+    if (useSoft) { return; }
     gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pPos);
     gl.bindBuffer(gl.ARRAY_BUFFER, colBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pCol);
     gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pSize);
@@ -774,6 +970,21 @@ var TERRAIN = (function () {
     /* sky colour travels with the story */
     var night = p > 0.9 ? (p - 0.9) / 0.1 : (p < 0.08 ? 1 - p / 0.08 : 0);
     var fog = [0.05 + 0.12 * (1 - night), 0.09 + 0.16 * (1 - night), 0.14 + 0.2 * (1 - night)];
+
+    if (useSoft) {
+      if (!soft) { soft = SOFT.init(canvas, land); }
+      if (soft) {
+        soft.draw({
+          W: W, H: H, dpr: DPR, mvp: mvp, lift: S.lift, time: time, fog: fog,
+          lava: Math.min(1, burn * 1.4), eye: eye,
+          particles: { count: PMAX, pos: pPos, col: pCol, size: pSize, life: pLife }
+        });
+      }
+      placeMarks(mvp);
+      requestAnimationFrame(frame);
+      return;
+    }
+
     gl.clearColor(fog[0], fog[1], fog[2], 1);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -841,7 +1052,11 @@ var TERRAIN = (function () {
     gl.depthMask(true);
     gl.disable(gl.BLEND);
 
-    /* ---- html markers, only once the map view opens ---- */
+    placeMarks(mvp);
+    requestAnimationFrame(frame);
+  }
+
+  function placeMarks(mvp) {
     var showMarks = p > 0.46 && S.lift > 0.7;
     ISLAND.places.forEach(function (pl, i) {
       var el = markEls[i];
@@ -855,8 +1070,6 @@ var TERRAIN = (function () {
       el.style.transform = 'translate(' + sp[0].toFixed(1) + 'px,' + sp[1].toFixed(1) + 'px)';
       el.classList.add('on');
     });
-
-    requestAnimationFrame(frame);
   }
 
   /* ---------------------------------------------------------------- input */
@@ -921,6 +1134,12 @@ var TERRAIN = (function () {
     canvas.width = Math.floor(W * DPR); canvas.height = Math.floor(H * DPR);
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     onScroll();
+  }
+
+  var modeEl = document.getElementById('mode');
+  if (modeEl) {
+    modeEl.textContent = useSoft ? 'software 3D · ' + why : 'webgl';
+    modeEl.title = why || '';
   }
 
   window.addEventListener('scroll', onScroll, { passive: true });
