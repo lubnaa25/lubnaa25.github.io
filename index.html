@@ -444,11 +444,9 @@
 
   /* ============================================================ RESPONSIVE */
   @media (max-width: 880px) {
-    .hero__grid { grid-template-columns: 1fr; }
-    .hero__portrait { order: -1; }
-    .portrait { width: min(74%, 230px); margin: 0; }
-    .think { align-items: flex-start; }
-    .think__body { width: min(15rem, 100%); }
+    .hero__grid { grid-template-columns: minmax(0, 1fr) 34%; gap: 1.25rem; align-items: start; }
+    .portrait { width: 100%; margin: 0; }
+    .think__body { width: 100%; }
     .think__tail { align-items: flex-start; margin: 4px 0 0 2.2rem; }
     .panel__intro, .split { grid-template-columns: 1fr; gap: 1.1rem; }
     .srow { grid-template-columns: 1fr; gap: 0.45rem; }
@@ -463,11 +461,20 @@
   }
 
   @media (max-width: 560px) {
-    :root { --fs-display: clamp(2.3rem, 12vw, 3rem); --rule: 1.9rem; }
-    .hero { padding-top: 1.5rem; padding-bottom: 1.25rem; }
-    .hero__grid { gap: 1.25rem; }
-    .portrait { width: min(64%, 190px); }
-    .hero__name { margin: 0.6rem 0 0.8rem; }
+    :root { --fs-display: clamp(1.7rem, 7.6vw, 2.3rem); --rule: 1.9rem; }
+    .hero { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+
+    /* the portrait keeps its place beside the text; the language bubble drops
+       below the pair, where it has the full width to itself */
+    .hero__grid { grid-template-columns: minmax(0, 1fr) 38%; column-gap: 0.85rem; row-gap: 0.9rem; }
+    .hero__portrait { display: contents; }
+    .hero__grid > div:first-child { grid-column: 1; grid-row: 1; }
+    .portrait { grid-column: 2; grid-row: 1; align-self: start; }
+    .think { grid-column: 1 / -1; grid-row: 2; margin-bottom: 0; }
+    .think__tail { display: none; }
+    .think__list li { font-size: 0.72rem; }
+
+    .hero__name { margin: 0.5rem 0 0.7rem; }
     .hero__lead { font-size: 1rem; max-width: none; }
     .expertise { gap: 0.3rem; margin-top: 1rem; }
     .expertise li { font-size: 0.64rem; padding: 0.24rem 0.45rem; }
@@ -1009,10 +1016,9 @@
 
   /* ---------- narrow screens ---------- */
   @media (max-width: 880px) {
-    /* the chips were absolute under a square portrait, so they printed over the
-       hero title. Below 880 they sit in reserved space instead. */
-    .hero__portrait { padding-bottom: 4.6rem; }
-    .attrs { top: calc(100% + 0.6rem); justify-content: flex-start; gap: 0.28rem; }
+    /* no room for the chips beside a narrow portrait - the paw widget in the
+       corner is the way into the pets here */
+    .attrs { display: none; }
     .attr__chip { font-size: 0.55rem; padding: 0.14rem 0.36rem; }
     .attr__pop {
       position: fixed; left: 50%; right: auto; bottom: auto; top: 50%;
